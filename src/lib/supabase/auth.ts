@@ -23,3 +23,23 @@ export async function signUp(
 export async function signOut() {
   return await supabase.auth.signOut();
 }
+
+export async function resetPassword(email: string) {
+  const redirectTo =
+    `${window.location.origin}/update-password`;
+
+  return await supabase.auth.resetPasswordForEmail(
+    email,
+    {
+      redirectTo,
+    }
+  );
+}
+
+export async function updatePassword(
+  password: string
+) {
+  return await supabase.auth.updateUser({
+    password,
+  });
+}
