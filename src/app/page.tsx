@@ -1,90 +1,127 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
-export default function DashboardPage() {
-  const [totalExpenses, setTotalExpenses] = useState(0);
-  const [totalInventoryValue, setTotalInventoryValue] = useState(0);
-  const [totalBlocks, setTotalBlocks] = useState(0);
+export default function HomePage() {
+  const router = useRouter();
 
-  useEffect(() => {
-    loadDashboard();
-  }, []);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  async function loadDashboard() {
-    // Expenses
-    const { data: expenses } = await supabase
-      .from("expenses")
-      .select("amount");
+  async function handleLogin(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
 
-    const expenseTotal = (expenses || []).reduce(
-      (sum, item) => sum + Number(item.amount),
-      0
-    );
+    setLoading(true);
 
-    setTotalExpenses(expenseTotal);
+    const { error } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    // Inventory
-    const { data: inventory } = await supabase
-      .from("inventory")
-      .select("quantity, unit_cost");
+    setLoading(false);
 
-    const inventoryTotal = (inventory || []).reduce(
-      (sum, item) =>
-        sum +
-        Number(item.quantity) *
-          Number(item.unit_cost),
-      0
-    );
+    if (error) {
+      alert(error.message);
+      return;
+    }
 
-    setTotalInventoryValue(inventoryTotal);
-
-    // Production
-    const { data: production } = await supabase
-      .from("production")
-      .select("quantity");
-
-    const productionTotal = (production || []).reduce(
-      (sum, item) => sum + Number(item.quantity),
-      0
-    );
-
-    setTotalBlocks(productionTotal);
+    router.push("/dashboard");
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">
-        Rexy Blocks Dashboard
-      </h1>
+    <main className="flex min-h-screen items-center justify-center bg-gray-100 p-6">
+      <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-lg">
 
-      <div className="grid gap-6 md:grid-cols-3">
-        <div className="rounded-lg bg-blue-600 p-6 text-white">
-          <p>Total Expenses</p>
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-bold">
+            Rexy Blocks Factory
+          </h1>
 
-          <h2 className="text-3xl font-bold">
-            GH₵{totalExpenses.toLocaleString()}
-          </h2>
+          <p className="mt-2 text-gray-600">
+            ERP Management System
+          </p>
         </div>
 
-        <div className="rounded-lg bg-green-600 p-6 text-white">
-          <p>Total Inventory Value</p>
+        <form
+          onSubmit={handleLogin}
+          className="space-y-4"
+        >
+          <div>
+            <label className="mb-2 block font-medium">
+              Email
+            </label>
 
-          <h2 className="text-3xl font-bold">
-            GH₵
-            {totalInventoryValue.toLocaleString()}
-          </h2>
+            <input
+              type="email"
+              placeholder="Enter your email"
+              className="w-full rounded-lg border p-3"
+              value={email}
+              onChange={(e) =>
+                setEmail(e.target.value)
+              }
+              required
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block font-medium">
+              Password
+            </label>
+
+            <input
+              type="password"
+              placeholder="Enter your password"
+              className="w-full rounded-lg border p-3"
+              value={password}
+              onChange={(e) =>
+                setPassword(e.target.value)
+              }
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-lg bg-blue-600 p-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading
+              ? "Signing in..."
+              : "Login"}
+          </button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <button
+            type="button"
+            onClick={() =>
+              router.push("/forget-password")
+            }
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Forgot Password?
+          </button>
         </div>
 
-        <div className="rounded-lg bg-purple-600 p-6 text-white">
-          <p>Total Blocks Produced</p>
-
-          <h2 className="text-3xl font-bold">
-            {totalBlocks.toLocaleString()}
-          </h2>
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() =>
+              router.push("/register")
+            }
+            className="text-sm text-gray-600 hover:underline"
+          >
+            Create an account
+          </button>
         </div>
+
       </div>
-    </div>
+    </main>
   );
 }
