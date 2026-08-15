@@ -12,7 +12,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   async function handleLogin(
-    event: React.FormEvent
+    event: React.FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
 
@@ -20,24 +20,30 @@ export default function LoginPage() {
 
     const { error } =
       await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
-    setLoading(false);
-
     if (error) {
+      setLoading(false);
       alert(error.message);
       return;
     }
 
+    /*
+     * Give the browser a moment to persist the
+     * Supabase session cookies before navigating
+     * to a server-backed page.
+     */
     router.push("/dashboard");
+    router.refresh();
+
+    setLoading(false);
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100">
       <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-lg">
-
         <h1 className="mb-6 text-center text-3xl font-bold">
           Rexy Blocks ERP
         </h1>
@@ -51,10 +57,11 @@ export default function LoginPage() {
             placeholder="Email address"
             className="w-full rounded-lg border p-3"
             value={email}
-            onChange={(e) =>
-              setEmail(e.target.value)
+            onChange={(event) =>
+              setEmail(event.target.value)
             }
             required
+            autoComplete="email"
           />
 
           <input
@@ -62,16 +69,17 @@ export default function LoginPage() {
             placeholder="Password"
             className="w-full rounded-lg border p-3"
             value={password}
-            onChange={(e) =>
-              setPassword(e.target.value)
+            onChange={(event) =>
+              setPassword(event.target.value)
             }
             required
+            autoComplete="current-password"
           />
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-blue-600 p-3 text-white"
+            className="w-full rounded-lg bg-blue-600 p-3 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
               ? "Signing in..."

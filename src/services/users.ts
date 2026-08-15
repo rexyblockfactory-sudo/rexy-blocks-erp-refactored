@@ -76,3 +76,56 @@ export async function updateUserRole(
     .update({ role })
     .eq("id", userId);
 }
+
+export async function inviteUser(
+  email: string,
+  fullName: string,
+  role: Exclude<UserRole, "admin">
+) {
+  const response = await fetch(
+    "/api/admin/users/invite",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        full_name: fullName.trim(),
+        role,
+      }),
+    }
+  );
+
+  let result: {
+    success?: boolean;
+    message?: string;
+    error?: string;
+  } = {};
+
+  try {
+    result = await response.json();
+  } catch {
+    return {
+      data: null,
+      error: new Error(
+        "The server returned an invalid response."
+      ),
+    };
+  }
+
+  if (!response.ok) {
+    return {
+      data: null,
+      error: new Error(
+        result.error ||
+          "Unable to send invitation."
+      ),
+    };
+  }
+
+  return {
+    data: result,
+    error: null,
+  };
+}
