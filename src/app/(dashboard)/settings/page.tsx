@@ -5,6 +5,7 @@ import {
   getUsers,
   updateUserRole,
   inviteUser,
+  deleteUser,
   type UserProfile,
 } from "@/services/users";
 import {
@@ -41,8 +42,14 @@ export default function SettingsPage() {
   const [savingUser, setSavingUser] =
     useState<string | null>(null);
 
+  const [deletingUser, setDeletingUser] =
+    useState<string | null>(null);
+
   const [error, setError] = useState("");
   const [inviteSuccess, setInviteSuccess] =
+    useState("");
+
+  const [deleteSuccess, setDeleteSuccess] =
     useState("");
 
   const [showInviteForm, setShowInviteForm] =
@@ -61,6 +68,9 @@ export default function SettingsPage() {
 
   const [inviting, setInviting] =
     useState(false);
+
+  const [userToDelete, setUserToDelete] =
+    useState<UserProfile | null>(null);
 
   const isAdmin =
     currentUser?.role === "admin";
@@ -96,6 +106,7 @@ export default function SettingsPage() {
     setSavingUser(userId);
     setError("");
     setInviteSuccess("");
+    setDeleteSuccess("");
 
     const { error } =
       await updateUserRole(
@@ -130,6 +141,7 @@ export default function SettingsPage() {
 
     setError("");
     setInviteSuccess("");
+    setDeleteSuccess("");
     setInviting(true);
 
     const { error } = await inviteUser(
@@ -158,14 +170,49 @@ export default function SettingsPage() {
     await loadUsers();
   }
 
+  async function handleDeleteUser() {
+    if (!userToDelete) {
+      return;
+    }
+
+    const userId = userToDelete.id;
+
+    setDeletingUser(userId);
+    setError("");
+    setInviteSuccess("");
+    setDeleteSuccess("");
+
+    const { error } =
+      await deleteUser(userId);
+
+    if (error) {
+      setError(error.message);
+      setDeletingUser(null);
+      return;
+    }
+
+    setUsers((currentUsers) =>
+      currentUsers.filter(
+        (user) => user.id !== userId
+      )
+    );
+
+    setDeleteSuccess(
+      `${userToDelete.full_name || userToDelete.email || "User"} was deleted successfully.`
+    );
+
+    setUserToDelete(null);
+    setDeletingUser(null);
+  }
+
   return (
     <div className="space-y-6 p-6">
       <h1 className="text-3xl font-bold">
         System Settings
       </h1>
 
-      {/* Company Information */}
       <div className="grid gap-6 md:grid-cols-2">
+        {/* Company Information */}
         <div className="rounded-xl border bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-xl font-semibold">
             Company Information
@@ -259,10 +306,9 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Admin User Management */}
+      {/* User Management */}
       {isAdmin && (
         <section className="rounded-xl border bg-white p-6 shadow-sm">
-          {/* Header */}
           <div className="mb-6 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold">
@@ -283,6 +329,7 @@ export default function SettingsPage() {
 
                 setError("");
                 setInviteSuccess("");
+                setDeleteSuccess("");
               }}
               className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
             >
@@ -292,21 +339,27 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          {/* Success message */}
+          {/* Success Messages */}
           {inviteSuccess && (
             <div className="mb-4 rounded-lg bg-green-50 p-4 text-green-700">
               {inviteSuccess}
             </div>
           )}
 
-          {/* Error message */}
+          {deleteSuccess && (
+            <div className="mb-4 rounded-lg bg-green-50 p-4 text-green-700">
+              {deleteSuccess}
+            </div>
+          )}
+
+          {/* Error */}
           {error && (
             <div className="mb-4 rounded-lg bg-red-50 p-4 text-red-700">
               {error}
             </div>
           )}
 
-          {/* Invite User Form */}
+          {/* Invite Form */}
           {showInviteForm && (
             <form
               onSubmit={handleInviteUser}
@@ -323,7 +376,6 @@ export default function SettingsPage() {
               </p>
 
               <div className="grid gap-4 md:grid-cols-3">
-                {/* Full Name */}
                 <div>
                   <label
                     htmlFor="invite-name"
@@ -348,7 +400,6 @@ export default function SettingsPage() {
                   />
                 </div>
 
-                {/* Email */}
                 <div>
                   <label
                     htmlFor="invite-email"
@@ -373,7 +424,6 @@ export default function SettingsPage() {
                   />
                 </div>
 
-                {/* Role */}
                 <div>
                   <label
                     htmlFor="invite-role"
@@ -411,7 +461,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* Submit */}
               <div className="mt-5 flex justify-end">
                 <button
                   type="submit"
@@ -468,6 +517,10 @@ export default function SettingsPage() {
                       user.id ===
                       currentUser?.id;
 
+                    const isDeleting =
+                      deletingUser ===
+                      user.id;
+
                     return (
                       <tr
                         key={user.id}
@@ -488,7 +541,8 @@ export default function SettingsPage() {
                             disabled={
                               isCurrentUser ||
                               savingUser ===
-                                user.id
+                                user.id ||
+                              isDeleting
                             }
                             onChange={(event) =>
                               handleRoleChange(
@@ -527,15 +581,32 @@ export default function SettingsPage() {
                             <span className="text-sm font-medium text-gray-500">
                               Current account
                             </span>
-                          ) : savingUser ===
-                            user.id ? (
-                            <span className="text-sm text-gray-500">
-                              Saving...
-                            </span>
                           ) : (
-                            <span className="text-sm text-gray-500">
-                              Select role
-                            </span>
+                            <button
+                              type="button"
+                              disabled={
+                                isDeleting ||
+                                savingUser ===
+                                  user.id
+                              }
+                              onClick={() => {
+                                setError("");
+                                setInviteSuccess(
+                                  ""
+                                );
+                                setDeleteSuccess(
+                                  ""
+                                );
+                                setUserToDelete(
+                                  user
+                                );
+                              }}
+                              className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {isDeleting
+                                ? "Deleting..."
+                                : "Delete"}
+                            </button>
                           )}
                         </td>
                       </tr>
@@ -546,6 +617,61 @@ export default function SettingsPage() {
             </div>
           )}
         </section>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-bold">
+              Delete User?
+            </h2>
+
+            <p className="mt-3 text-gray-600">
+              Are you sure you want to permanently
+              delete{" "}
+              <strong>
+                {userToDelete.full_name ||
+                  userToDelete.email ||
+                  "this user"}
+              </strong>
+              ?
+            </p>
+
+            <p className="mt-2 text-sm text-red-600">
+              This will remove the user's login
+              account and profile.
+            </p>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  setUserToDelete(null)
+                }
+                disabled={
+                  deletingUser !== null
+                }
+                className="rounded-lg border px-4 py-2 font-medium hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDeleteUser}
+                disabled={
+                  deletingUser !== null
+                }
+                className="rounded-lg bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deletingUser
+                  ? "Deleting..."
+                  : "Delete User"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

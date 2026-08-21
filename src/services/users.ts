@@ -129,3 +129,47 @@ export async function inviteUser(
     error: null,
   };
 }
+export async function deleteUser(
+  userId: string
+) {
+  const response = await fetch(
+    `/api/admin/users/${encodeURIComponent(
+      userId
+    )}`,
+    {
+      method: "DELETE",
+    }
+  );
+
+  let result: {
+    success?: boolean;
+    message?: string;
+    error?: string;
+  } = {};
+
+  try {
+    result = await response.json();
+  } catch {
+    return {
+      data: null,
+      error: new Error(
+        "The server returned an invalid response."
+      ),
+    };
+  }
+
+  if (!response.ok) {
+    return {
+      data: null,
+      error: new Error(
+        result.error ||
+          "Unable to delete user."
+      ),
+    };
+  }
+
+  return {
+    data: result,
+    error: null,
+  };
+}
