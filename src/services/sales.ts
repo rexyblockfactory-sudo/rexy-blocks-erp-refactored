@@ -21,106 +21,41 @@ export async function getRecentSales(limit = 5) {
 }
 
 export async function createSale(
-  input: CreateSaleInput
+  input: CreateSaleInput & {
+    product_id?: string;
+  }
 ): Promise<{
   data: Sale | null;
   error: Error | null;
 }> {
-  const totalAmount =
-    input.quantity * input.unit_price;
-
-  // 1. Create the sale.
-  const { data: sale, error: saleError } =
-    await supabase
-      .from("sales")
-      .insert([
-        {
-          customer_name: input.customer_name,
-          product_name: input.product_name,
-          quantity: input.quantity,
-          unit_price: input.unit_price,
-          total_amount: totalAmount,
-          payment_method: input.payment_method,
-        },
-      ])
-      .select()
-      .single();
-
-  if (saleError) {
-    return {
-      data: null,
-      error: new Error(saleError.message),
-    };
-  }
-
-  // 2. Deduct the finished product from inventory.
-  const { error: inventoryError } =
-    await supabase.rpc("deduct_product_inventory", {
-      product: input.product_name,
-      qty: input.quantity,
-    });
-
-  if (inventoryError) {
-    console.error(
-      "Inventory deduction failed:",
-      inventoryError
-    );
-
-    // Remove the sale because inventory could not
-    // be successfully deducted.
-    await supabase
-      .from("sales")
-      .delete()
-      .eq("id", sale.id);
-
+  if (!input.product_id) {
     return {
       data: null,
       error: new Error(
-        `Sale was not completed because inventory could not be deducted: ${inventoryError.message}`
+        "A product ID is required to create a sale."
       ),
     };
   }
 
-  // 3. Create the invoice.
-  const invoiceNumber = `INV-${Date.now()}`;
+  const { data, error } = await supabase.rpc(
+    "create_sale_with_current_price",
+    {
+      p_customer_name: input.customer_name,
+      p_product_id: input.product_id,
+      p_quantity: input.quantity,
+      p_payment_method: input.payment_method,
+    }
+  );
 
-  const { error: invoiceError } = await supabase
-    .from("invoices")
-    .insert([
-      {
-        invoice_number: invoiceNumber,
-        customer_name: input.customer_name,
-        product_name: input.product_name,
-        quantity: input.quantity,
-        unit_price: input.unit_price,
-        total_amount: totalAmount,
-        payment_method: input.payment_method,
-      },
-    ]);
-
-  if (invoiceError) {
-    console.error(
-      "Invoice creation failed:",
-      invoiceError
-    );
-
-    // Remove the sale because the invoice could
-    // not be created.
-    await supabase
-      .from("sales")
-      .delete()
-      .eq("id", sale.id);
-
+  if (error) {
     return {
       data: null,
-      error: new Error(
-        `Sale was not completed because the invoice could not be created: ${invoiceError.message}`
-      ),
+      error: new Error(error.message),
     };
   }
 
   return {
-    data: sale as Sale,
+    data: data as Sale,
     error: null,
   };
 }

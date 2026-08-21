@@ -130,13 +130,14 @@ export default function SalesForm() {
 
     setSaving(true);
 
-    const { error } = await createSale({
-      customer_name: customerName,
-      product_name: selectedProduct.name,
-      quantity: quantityNumber,
-      unit_price: unitPrice,
-      payment_method: paymentMethod,
-    });
+   const { error } = await createSale({
+  customer_name: customerName,
+  product_name: selectedProduct.name,
+  product_id: selectedProduct.id,
+  quantity: quantityNumber,
+  unit_price: unitPrice,
+  payment_method: paymentMethod,
+});
 
     if (error) {
       console.error("Sale error:", error);
