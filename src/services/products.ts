@@ -52,3 +52,58 @@ export async function createProduct(
     error: null,
   };
 }
+export async function updateProductPrice(
+  productId: string,
+  price: number
+): Promise<{
+  data: Product | null;
+  error: Error | null;
+}> {
+  const response = await fetch(
+    `/api/admin/products/${encodeURIComponent(
+      productId
+    )}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        price,
+      }),
+    }
+  );
+
+  let result: {
+    success?: boolean;
+    product?: Product;
+    message?: string;
+    error?: string;
+  } = {};
+
+  try {
+    result = await response.json();
+  } catch {
+    return {
+      data: null,
+      error: new Error(
+        "The server returned an invalid response."
+      ),
+    };
+  }
+
+  if (!response.ok) {
+    return {
+      data: null,
+      error: new Error(
+        result.error ||
+          "Unable to update product price."
+      ),
+    };
+  }
+
+  return {
+    data: result.product || null,
+    error: null,
+  };
+}
