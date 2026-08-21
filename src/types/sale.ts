@@ -6,13 +6,14 @@ export interface Sale {
   unit_price: number;
   total_amount: number;
   payment_method: string;
+  amount_paid: number;
+  balance_due: number;
   created_at: string;
 }
 
 export interface CreateSaleInput {
   customer_name: string;
-  product_name: string;
+  product_id: string;
   quantity: number;
-  unit_price: number;
   payment_method: string;
 }

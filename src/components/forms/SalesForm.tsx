@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { createSale } from "@/services/sales";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
+import { createSale } from "@/services/sales";
 import { supabase } from "@/lib/supabase/client";
 
 interface Customer {
@@ -19,46 +23,68 @@ interface Product {
 }
 
 export default function SalesForm() {
-  const [customers, setCustomers] = useState<Customer[]>(
-    []
-  );
+  const [customers, setCustomers] =
+    useState<Customer[]>([]);
 
-  const [products, setProducts] = useState<Product[]>(
-    []
-  );
+  const [products, setProducts] =
+    useState<Product[]>([]);
 
-  const [customerName, setCustomerName] = useState("");
-  const [productId, setProductId] = useState("");
-  const [quantity, setQuantity] = useState("");
+  const [customerName, setCustomerName] =
+    useState("");
+
+  const [productId, setProductId] =
+    useState("");
+
+  const [quantity, setQuantity] =
+    useState("");
+
   const [paymentMethod, setPaymentMethod] =
     useState("Cash");
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [successMessage, setSuccessMessage] =
+    useState("");
+
+  const [errorMessage, setErrorMessage] =
+    useState("");
 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
+      setErrorMessage("");
 
-      const [customersResult, productsResult] =
-        await Promise.all([
-          supabase
-            .from("customers")
-            .select("id, customer_name")
-            .order("customer_name"),
+      const [
+        customersResult,
+        productsResult,
+      ] = await Promise.all([
+        supabase
+          .from("customers")
+          .select(
+            "id, customer_name"
+          )
+          .order("customer_name"),
 
-          supabase
-            .from("products")
-            .select(
-              "id, name, category, size, price"
-            )
-            .order("name"),
-        ]);
+        supabase
+          .from("products")
+          .select(
+            "id, name, category, size, price"
+          )
+          .order("name"),
+      ]);
 
       if (customersResult.error) {
         console.error(
           "Customers error:",
           customersResult.error
+        );
+
+        setErrorMessage(
+          customersResult.error.message
         );
       } else {
         setCustomers(
@@ -71,9 +97,14 @@ export default function SalesForm() {
           "Products error:",
           productsResult.error
         );
+
+        setErrorMessage(
+          productsResult.error.message
+        );
       } else {
         setProducts(
-          productsResult.data || []
+          (productsResult.data ||
+            []) as Product[]
         );
       }
 
@@ -85,7 +116,8 @@ export default function SalesForm() {
 
   const selectedProduct = useMemo(() => {
     return products.find(
-      (product) => product.id === productId
+      (product) =>
+        product.id === productId
     );
   }, [products, productId]);
 
@@ -93,61 +125,134 @@ export default function SalesForm() {
     selectedProduct?.price || 0
   );
 
-  const quantityNumber = Number(quantity || 0);
+  const quantityNumber = Number(
+    quantity || 0
+  );
 
-  const totalAmount =
+  const estimatedTotal =
     quantityNumber * unitPrice;
 
   async function handleSubmit(
-    e: React.FormEvent<HTMLFormElement>
+    event: React.FormEvent<HTMLFormElement>
   ) {
-    e.preventDefault();
+    event.preventDefault();
+
+    setErrorMessage("");
+    setSuccessMessage("");
 
     if (!customerName) {
-      alert("Please select a customer.");
+      setErrorMessage(
+        "Please select a customer."
+      );
       return;
     }
 
     if (!selectedProduct) {
-      alert("Please select a product.");
+      setErrorMessage(
+        "Please select a product."
+      );
       return;
     }
 
     if (
       !quantity ||
+      !Number.isInteger(quantityNumber) ||
       quantityNumber <= 0
     ) {
-      alert("Please enter a valid quantity.");
+      setErrorMessage(
+        "Please enter a valid whole-number quantity."
+      );
       return;
     }
 
     if (unitPrice <= 0) {
-      alert(
+      setErrorMessage(
         "The selected product does not have a valid price."
+      );
+      return;
+    }
+
+    if (!paymentMethod) {
+      setErrorMessage(
+        "Please select a payment method."
       );
       return;
     }
 
     setSaving(true);
 
-   const { error } = await createSale({
-  customer_name: customerName,
-  product_name: selectedProduct.name,
-  product_id: selectedProduct.id,
-  quantity: quantityNumber,
-  unit_price: unitPrice,
-  payment_method: paymentMethod,
-});
+    const {
+      data,
+      error,
+    } = await createSale({
+      customer_name:
+        customerName,
+
+      product_id:
+        selectedProduct.id,
+
+      quantity:
+        quantityNumber,
+
+      payment_method:
+        paymentMethod,
+    });
 
     if (error) {
-      console.error("Sale error:", error);
-      alert(error.message);
+      console.error(
+        "Sale error:",
+        error
+      );
+
+      setErrorMessage(
+        error.message
+      );
+
       setSaving(false);
       return;
     }
 
-    alert(
-      "Sale saved successfully and invoice created."
+    if (!data) {
+      setErrorMessage(
+        "Sale was created, but no sale information was returned."
+      );
+
+      setSaving(false);
+      return;
+    }
+
+    const totalAmount = Number(
+      data.total_amount || 0
+    );
+
+    const amountPaid = Number(
+      data.amount_paid || 0
+    );
+
+    const balanceDue = Number(
+      data.balance_due || 0
+    );
+
+    let status = "Unpaid";
+
+    if (
+      amountPaid >= totalAmount &&
+      totalAmount > 0
+    ) {
+      status = "Paid";
+    } else if (
+      amountPaid > 0 &&
+      balanceDue > 0
+    ) {
+      status = "Partially Paid";
+    }
+
+    setSuccessMessage(
+      `Sale saved successfully.\n\n` +
+        `Total: GH₵${totalAmount.toFixed(2)}\n` +
+        `Paid: GH₵${amountPaid.toFixed(2)}\n` +
+        `Balance: GH₵${balanceDue.toFixed(2)}\n` +
+        `Status: ${status}`
     );
 
     setCustomerName("");
@@ -161,7 +266,9 @@ export default function SalesForm() {
   if (loading) {
     return (
       <div className="rounded-lg bg-white p-6 shadow">
-        <p>Loading customers and products...</p>
+        <p>
+          Loading customers and products...
+        </p>
       </div>
     );
   }
@@ -178,8 +285,10 @@ export default function SalesForm() {
 
         <select
           value={customerName}
-          onChange={(e) =>
-            setCustomerName(e.target.value)
+          onChange={(event) =>
+            setCustomerName(
+              event.target.value
+            )
           }
           className="w-full rounded border p-3"
           required
@@ -191,7 +300,9 @@ export default function SalesForm() {
           {customers.map((customer) => (
             <option
               key={customer.id}
-              value={customer.customer_name}
+              value={
+                customer.customer_name
+              }
             >
               {customer.customer_name}
             </option>
@@ -200,8 +311,9 @@ export default function SalesForm() {
 
         {customers.length === 0 && (
           <p className="mt-2 text-sm text-red-600">
-            No customers found. Add a customer
-            before recording a sale.
+            No customers found. Add a
+            customer before recording a
+            sale.
           </p>
         )}
       </div>
@@ -213,8 +325,10 @@ export default function SalesForm() {
 
         <select
           value={productId}
-          onChange={(e) =>
-            setProductId(e.target.value)
+          onChange={(event) =>
+            setProductId(
+              event.target.value
+            )
           }
           className="w-full rounded border p-3"
           required
@@ -255,8 +369,8 @@ export default function SalesForm() {
           </p>
 
           <p className="text-sm text-gray-600">
-            {selectedProduct.category} •{" "}
-            {selectedProduct.size}
+            {selectedProduct.category}{" "}
+            • {selectedProduct.size}
           </p>
         </div>
       )}
@@ -271,8 +385,10 @@ export default function SalesForm() {
           min="1"
           step="1"
           value={quantity}
-          onChange={(e) =>
-            setQuantity(e.target.value)
+          onChange={(event) =>
+            setQuantity(
+              event.target.value
+            )
           }
           className="w-full rounded border p-3"
           placeholder="Enter quantity"
@@ -289,6 +405,22 @@ export default function SalesForm() {
           GH₵
           {unitPrice.toLocaleString()}
         </div>
+
+        <p className="mt-1 text-xs text-gray-500">
+          Price comes from the current
+          product price.
+        </p>
+      </div>
+
+      <div>
+        <label className="mb-2 block font-medium">
+          Estimated Total
+        </label>
+
+        <div className="rounded border bg-gray-50 p-3">
+          GH₵
+          {estimatedTotal.toLocaleString()}
+        </div>
       </div>
 
       <div>
@@ -298,33 +430,55 @@ export default function SalesForm() {
 
         <select
           value={paymentMethod}
-          onChange={(e) =>
-            setPaymentMethod(e.target.value)
+          onChange={(event) =>
+            setPaymentMethod(
+              event.target.value
+            )
           }
           className="w-full rounded border p-3"
         >
-          <option value="Cash">Cash</option>
-          <option value="Credit">Credit</option>
+          <option value="Cash">
+            Cash
+          </option>
+
           <option value="Mobile Money">
             Mobile Money
+          </option>
+
+          <option value="Bank Transfer">
+            Bank Transfer
+          </option>
+
+          <option value="Cheque">
+            Cheque
+          </option>
+
+          <option value="Credit">
+            Credit
           </option>
         </select>
       </div>
 
-      <div className="rounded-lg bg-gray-100 p-4">
-        <p className="text-sm text-gray-600">
-          Total Amount
-        </p>
+      {errorMessage && (
+        <div className="whitespace-pre-line rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          {errorMessage}
+        </div>
+      )}
 
-        <p className="text-3xl font-bold">
-          GH₵
-          {totalAmount.toLocaleString()}
-        </p>
-      </div>
+      {successMessage && (
+        <div className="whitespace-pre-line rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
+          {successMessage}
+        </div>
+      )}
 
       <button
         type="submit"
-        disabled={saving || loading}
+        disabled={
+          saving ||
+          loading ||
+          customers.length === 0 ||
+          products.length === 0
+        }
         className="w-full rounded-lg bg-blue-600 px-5 py-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {saving
