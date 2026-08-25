@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Suspense,
   useEffect,
   useMemo,
   useState,
@@ -66,7 +67,15 @@ function formatDate(value: string) {
   );
 }
 
-export default function CustomerStatementsPage() {
+/*
+ * ============================================================
+ * CUSTOMER STATEMENTS CONTENT
+ * ============================================================
+ *
+ * This component uses useSearchParams().
+ * It is rendered inside Suspense below.
+ */
+function CustomerStatementsContent() {
   const searchParams = useSearchParams();
 
   const customerFromUrl =
@@ -108,16 +117,18 @@ export default function CustomerStatementsPage() {
   ] = useState("");
 
   /*
-   * Load customer names.
+   * ==========================================================
+   * LOAD CUSTOMER NAMES
+   * ==========================================================
    */
   useEffect(() => {
     loadCustomers();
   }, []);
 
   /*
-   * If Customer Accounts sends us a customer
-   * through ?customer=..., automatically open
-   * that customer's statement.
+   * ==========================================================
+   * OPEN CUSTOMER FROM URL
+   * ==========================================================
    */
   useEffect(() => {
     if (
@@ -137,6 +148,11 @@ export default function CustomerStatementsPage() {
     customers,
   ]);
 
+  /*
+   * ==========================================================
+   * LOAD CUSTOMERS
+   * ==========================================================
+   */
   async function loadCustomers() {
     setLoadingCustomers(true);
     setErrorMessage("");
@@ -205,6 +221,11 @@ export default function CustomerStatementsPage() {
     }
   }
 
+  /*
+   * ==========================================================
+   * LOAD CUSTOMER STATEMENT
+   * ==========================================================
+   */
   async function loadStatement(
     customerName: string
   ) {
@@ -269,9 +290,7 @@ export default function CustomerStatementsPage() {
           (sale) => sale.id
         );
 
-      if (
-        saleIds.length === 0
-      ) {
+      if (saleIds.length === 0) {
         setPayments([]);
         return;
       }
@@ -331,6 +350,11 @@ export default function CustomerStatementsPage() {
     }
   }
 
+  /*
+   * ==========================================================
+   * CUSTOMER CHANGE
+   * ==========================================================
+   */
   function handleCustomerChange(
     customerName: string
   ) {
@@ -344,10 +368,12 @@ export default function CustomerStatementsPage() {
   }
 
   /*
-   * Build the customer ledger.
+   * ==========================================================
+   * BUILD CUSTOMER LEDGER
    *
-   * Sales = Debit
+   * Sales    = Debit
    * Payments = Credit
+   * ==========================================================
    */
   const statementEntries =
     useMemo(() => {
@@ -408,8 +434,7 @@ export default function CustomerStatementsPage() {
       );
 
       /*
-       * Sort all transactions by
-       * actual transaction time.
+       * Sort transactions by actual time.
        */
       entries.sort(
         (a, b) =>
@@ -445,7 +470,9 @@ export default function CustomerStatementsPage() {
     ]);
 
   /*
-   * Summary totals.
+   * ==========================================================
+   * SUMMARY TOTALS
+   * ==========================================================
    */
   const totalSales =
     useMemo(
@@ -490,21 +517,12 @@ export default function CustomerStatementsPage() {
         totalPayments
     );
 
-  /*
-   * Number of sales.
-   */
   const salesCount =
     sales.length;
 
-  /*
-   * Number of payments.
-   */
   const paymentsCount =
     payments.length;
 
-  /*
-   * Customer status.
-   */
   const customerStatus =
     outstanding <= 0 &&
     totalSales > 0
@@ -513,10 +531,20 @@ export default function CustomerStatementsPage() {
         ? "Owing"
         : "No Sales";
 
+  /*
+   * ==========================================================
+   * PRINT
+   * ==========================================================
+   */
   function printStatement() {
     window.print();
   }
 
+  /*
+   * ==========================================================
+   * RENDER
+   * ==========================================================
+   */
   return (
     <main className="space-y-6 p-6">
 
@@ -547,7 +575,6 @@ export default function CustomerStatementsPage() {
             Print Statement
           </button>
         )}
-
       </div>
 
       {/* CUSTOMER SELECTOR */}
@@ -593,14 +620,12 @@ export default function CustomerStatementsPage() {
             )
           )}
         </select>
-
       </div>
 
       {/* ERROR */}
 
       {errorMessage && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 print:hidden">
-
           <p className="font-semibold">
             Statement Error
           </p>
@@ -608,7 +633,6 @@ export default function CustomerStatementsPage() {
           <p className="mt-1">
             {errorMessage}
           </p>
-
         </div>
       )}
 
@@ -643,9 +667,7 @@ export default function CustomerStatementsPage() {
             {/* PRINT HEADER */}
 
             <div className="hidden print:block">
-
               <div className="border-b pb-4">
-
                 <h1 className="text-3xl font-bold">
                   Rexy Blocks Factory
                 </h1>
@@ -659,19 +681,15 @@ export default function CustomerStatementsPage() {
                   Customer
                   Statement
                 </p>
-
               </div>
-
             </div>
 
             {/* CUSTOMER INFORMATION */}
 
             <div className="rounded-lg border bg-white p-6 shadow-sm">
-
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
 
                 <div>
-
                   <p className="text-sm text-gray-500">
                     Customer
                   </p>
@@ -686,11 +704,9 @@ export default function CustomerStatementsPage() {
                     Rexy Blocks
                     Factory
                   </p>
-
                 </div>
 
                 <div className="text-left md:text-right">
-
                   <p className="text-sm text-gray-500">
                     Statement Date
                   </p>
@@ -706,7 +722,6 @@ export default function CustomerStatementsPage() {
                   </p>
 
                   <div className="mt-2">
-
                     {customerStatus ===
                     "Owing" ? (
                       <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
@@ -722,13 +737,9 @@ export default function CustomerStatementsPage() {
                         No Sales
                       </span>
                     )}
-
                   </div>
-
                 </div>
-
               </div>
-
             </div>
 
             {/* SUMMARY CARDS */}
@@ -736,7 +747,6 @@ export default function CustomerStatementsPage() {
             <div className="grid gap-4 md:grid-cols-3">
 
               <div className="rounded-lg border bg-white p-5 shadow-sm">
-
                 <p className="text-sm text-gray-500">
                   Total Sales
                 </p>
@@ -750,16 +760,13 @@ export default function CustomerStatementsPage() {
                 <p className="mt-1 text-xs text-gray-500">
                   {salesCount}{" "}
                   sale
-                  {salesCount ===
-                  1
+                  {salesCount === 1
                     ? ""
                     : "s"}
                 </p>
-
               </div>
 
               <div className="rounded-lg border bg-white p-5 shadow-sm">
-
                 <p className="text-sm text-gray-500">
                   Total Payments
                 </p>
@@ -773,16 +780,13 @@ export default function CustomerStatementsPage() {
                 <p className="mt-1 text-xs text-gray-500">
                   {paymentsCount}{" "}
                   payment
-                  {paymentsCount ===
-                  1
+                  {paymentsCount === 1
                     ? ""
                     : "s"}
                 </p>
-
               </div>
 
               <div className="rounded-lg border bg-white p-5 shadow-sm">
-
                 <p className="text-sm text-gray-500">
                   Outstanding Balance
                 </p>
@@ -797,21 +801,16 @@ export default function CustomerStatementsPage() {
                   Current amount
                   owing
                 </p>
-
               </div>
-
             </div>
 
             {/* LEDGER */}
 
             <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
-
               <table className="min-w-full">
 
                 <thead className="bg-gray-50">
-
                   <tr>
-
                     <th className="whitespace-nowrap border-b p-3 text-left text-sm font-semibold">
                       Date
                     </th>
@@ -839,45 +838,31 @@ export default function CustomerStatementsPage() {
                     <th className="border-b p-3 text-right text-sm font-semibold">
                       Balance
                     </th>
-
                   </tr>
-
                 </thead>
 
                 <tbody>
-
                   {statementEntries.length ===
                   0 ? (
-
                     <tr>
-
                       <td
-                        colSpan={
-                          7
-                        }
+                        colSpan={7}
                         className="p-8 text-center text-gray-500"
                       >
                         No transactions
                         found for
                         this customer.
                       </td>
-
                     </tr>
-
                   ) : (
-
                     statementEntries.map(
-                      (
-                        entry
-                      ) => (
-
+                      (entry) => (
                         <tr
                           key={
                             entry.id
                           }
                           className="border-b last:border-b-0"
                         >
-
                           <td className="whitespace-nowrap p-3 text-sm">
                             {formatDate(
                               entry.date
@@ -885,7 +870,6 @@ export default function CustomerStatementsPage() {
                           </td>
 
                           <td className="p-3">
-
                             <div>
                               {
                                 entry.description
@@ -908,75 +892,56 @@ export default function CustomerStatementsPage() {
                                 }
                               </div>
                             )}
-
                           </td>
 
                           <td className="p-3">
-
                             {entry.type ===
                             "Sale" ? (
-
                               <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-700">
                                 Sale
                               </span>
-
                             ) : (
-
                               <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
                                 Payment
                               </span>
-
                             )}
-
                           </td>
 
                           <td className="p-3">
-
                             {entry.type ===
                             "Payment"
                               ? entry.paymentMethod ||
                                 "—"
                               : "—"}
-
                           </td>
 
                           <td className="whitespace-nowrap p-3 text-right">
-
                             {entry.debit >
                             0
                               ? money(
                                   entry.debit
                                 )
                               : "—"}
-
                           </td>
 
                           <td className="whitespace-nowrap p-3 text-right">
-
                             {entry.credit >
                             0
                               ? money(
                                   entry.credit
                                 )
                               : "—"}
-
                           </td>
 
                           <td className="whitespace-nowrap p-3 text-right font-semibold">
-
                             {money(
                               entry.balance
                             )}
-
                           </td>
-
                         </tr>
-
                       )
                     )
-
                   )}
-
                 </tbody>
 
                 {/* TOTALS */}
@@ -984,13 +949,9 @@ export default function CustomerStatementsPage() {
                 {statementEntries.length >
                   0 && (
                   <tfoot className="bg-gray-50">
-
                     <tr>
-
                       <td
-                        colSpan={
-                          4
-                        }
+                        colSpan={4}
                         className="p-3 text-right font-bold"
                       >
                         Totals
@@ -1013,14 +974,10 @@ export default function CustomerStatementsPage() {
                           outstanding
                         )}
                       </td>
-
                     </tr>
-
                   </tfoot>
                 )}
-
               </table>
-
             </div>
 
             {/* BALANCE NOTICE */}
@@ -1032,14 +989,10 @@ export default function CustomerStatementsPage() {
                   : "border-green-200 bg-green-50"
               }`}
             >
-
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-
                 <div>
-
                   <p className="font-semibold">
-                    {outstanding >
-                    0
+                    {outstanding > 0
                       ? "Amount Outstanding"
                       : "Account Paid"}
                   </p>
@@ -1050,7 +1003,6 @@ export default function CustomerStatementsPage() {
                       ? "This is the current amount owed by the customer."
                       : "This customer's account has no outstanding balance."}
                   </p>
-
                 </div>
 
                 <p className="text-2xl font-bold">
@@ -1058,15 +1010,12 @@ export default function CustomerStatementsPage() {
                     outstanding
                   )}
                 </p>
-
               </div>
-
             </div>
 
             {/* PRINT FOOTER */}
 
             <div className="hidden border-t pt-6 text-sm text-gray-500 print:block">
-
               <p>
                 Thank you for doing
                 business with Rexy
@@ -1081,9 +1030,7 @@ export default function CustomerStatementsPage() {
                 Factory management
                 system.
               </p>
-
             </div>
-
           </div>
         )}
 
@@ -1122,7 +1069,40 @@ export default function CustomerStatementsPage() {
           }
         }
       `}</style>
-
     </main>
+  );
+}
+
+/*
+ * ============================================================
+ * PAGE
+ * ============================================================
+ *
+ * Next.js 16 requires a Suspense boundary around the component
+ * that calls useSearchParams().
+ */
+export default function CustomerStatementsPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="space-y-6 p-6">
+          <div>
+            <h1 className="text-3xl font-bold">
+              Customer Statements
+            </h1>
+
+            <p className="mt-1 text-gray-600">
+              Loading customer statements...
+            </p>
+          </div>
+
+          <div className="rounded-lg border bg-white p-10 text-center text-gray-500 shadow-sm">
+            Loading...
+          </div>
+        </main>
+      }
+    >
+      <CustomerStatementsContent />
+    </Suspense>
   );
 }
