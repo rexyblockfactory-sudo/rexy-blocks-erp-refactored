@@ -19,6 +19,11 @@ export async function getSales(): Promise<{
     });
 
   if (error) {
+    console.error(
+      "getSales error:",
+      error
+    );
+
     return {
       data: null,
       error: new Error(error.message),
@@ -26,21 +31,21 @@ export async function getSales(): Promise<{
   }
 
   return {
-    data: (data || []) as Sale[],
+    data: (data ?? []) as Sale[],
     error: null,
   };
 }
 
 /**
- * Get one sale by ID.
+ * Get a single sale by ID.
  */
-export async function getSale(
+export async function getSaleById(
   saleId: string
 ): Promise<{
   data: Sale | null;
   error: Error | null;
 }> {
-  if (!saleId) {
+  if (!saleId?.trim()) {
     return {
       data: null,
       error: new Error(
@@ -52,10 +57,15 @@ export async function getSale(
   const { data, error } = await supabase
     .from("sales")
     .select("*")
-    .eq("id", saleId)
-    .maybeSingle();
+    .eq("id", saleId.trim())
+    .single();
 
   if (error) {
+    console.error(
+      "getSaleById error:",
+      error
+    );
+
     return {
       data: null,
       error: new Error(error.message),
@@ -66,7 +76,7 @@ export async function getSale(
     return {
       data: null,
       error: new Error(
-        "Sale was not found."
+        `Sale "${saleId}" was not found.`
       ),
     };
   }
@@ -78,15 +88,29 @@ export async function getSale(
 }
 
 /**
- * Create a new sale using the current
- * product price stored in the database.
+ * Create a sale.
  *
- * The database function is authoritative for:
- * - product price
- * - total amount
- * - inventory deduction
+ * IMPORTANT:
+ * This uses the UUID-based database function:
+ *
+ * create_sale_with_current_price(
+ *   text,
+ *   uuid,
+ *   integer,
+ *   text
+ * )
+ *
+ * The database function is responsible for:
+ * - current selling price
+ * - finished-goods inventory
+ * - production cost
+ * - COGS
+ * - gross profit
+ * - gross margin
+ * - payment amount
+ * - customer balance
  * - invoice creation
- * - initial payment/balance
+ * - inventory deduction
  */
 export async function createSale(
   input: CreateSaleInput
@@ -94,6 +118,10 @@ export async function createSale(
   data: Sale | null;
   error: Error | null;
 }> {
+  // ------------------------------------------------------------
+  // VALIDATION
+  // ------------------------------------------------------------
+
   if (!input.customer_name?.trim()) {
     return {
       data: null,
@@ -133,23 +161,44 @@ export async function createSale(
     };
   }
 
-  const { data, error } =
-    await supabase.rpc(
-      "create_sale_with_current_price",
-      {
-        p_customer_name:
-          input.customer_name.trim(),
+  // ------------------------------------------------------------
+  // DATABASE TRANSACTION
+  //
+  // DO NOT change these parameter names.
+  //
+  // The active PostgreSQL function is:
+  //
+  // create_sale_with_current_price(
+  //   text,
+  //   uuid,
+  //   integer,
+  //   text
+  // )
+  // ------------------------------------------------------------
 
-        p_product_id:
-          input.product_id,
+  const {
+    data,
+    error,
+  } = await supabase.rpc(
+    "create_sale_with_current_price",
+    {
+      p_customer_name:
+        input.customer_name.trim(),
 
-        p_quantity:
-          input.quantity,
+      p_product_id:
+        input.product_id,
 
-        p_payment_method:
-          input.payment_method.trim(),
-      }
-    );
+      p_quantity:
+        input.quantity,
+
+      p_payment_method:
+        input.payment_method.trim(),
+    }
+  );
+
+  // ------------------------------------------------------------
+  // DATABASE ERROR
+  // ------------------------------------------------------------
 
   if (error) {
     console.error(
@@ -159,9 +208,15 @@ export async function createSale(
 
     return {
       data: null,
-      error: new Error(error.message),
+      error: new Error(
+        error.message
+      ),
     };
   }
+
+  // ------------------------------------------------------------
+  // NO SALE RETURNED
+  // ------------------------------------------------------------
 
   if (!data) {
     return {
@@ -172,6 +227,10 @@ export async function createSale(
     };
   }
 
+  // ------------------------------------------------------------
+  // SUCCESS
+  // ------------------------------------------------------------
+
   return {
     data: data as Sale,
     error: null,
@@ -179,30 +238,33 @@ export async function createSale(
 }
 
 /**
- * Record a payment against an existing sale.
+ * Record an additional payment against an existing sale.
  *
- * Database responsibilities:
- * - authentication
- * - authorization
- * - sale locking
- * - payment validation
- * - overpayment prevention
- * - sale_payments insertion
- * - amount_paid update
- * - balance_due update
- * - invoice payment status synchronization
+ * This uses the PostgreSQL function:
+ *
+ * record_sale_payment(
+ *   uuid,
+ *   numeric,
+ *   text,
+ *   text,
+ *   text
+ * )
  */
 export async function recordSalePayment(
   saleId: string,
   amount: number,
   paymentMethod: string,
-  reference?: string,
-  notes?: string
+  reference?: string | null,
+  notes?: string | null
 ): Promise<{
   data: Sale | null;
   error: Error | null;
 }> {
-  if (!saleId) {
+  // ------------------------------------------------------------
+  // VALIDATION
+  // ------------------------------------------------------------
+
+  if (!saleId?.trim()) {
     return {
       data: null,
       error: new Error(
@@ -232,20 +294,36 @@ export async function recordSalePayment(
     };
   }
 
-  const { data, error } =
-    await supabase.rpc(
-      "record_sale_payment",
-      {
-        p_sale_id: saleId,
-        p_amount: amount,
-        p_payment_method:
-          paymentMethod.trim(),
-        p_reference:
-          reference?.trim() || null,
-        p_notes:
-          notes?.trim() || null,
-      }
-    );
+  // ------------------------------------------------------------
+  // RECORD PAYMENT
+  // ------------------------------------------------------------
+
+  const {
+    data,
+    error,
+  } = await supabase.rpc(
+    "record_sale_payment",
+    {
+      p_sale_id:
+        saleId.trim(),
+
+      p_amount:
+        amount,
+
+      p_payment_method:
+        paymentMethod.trim(),
+
+      p_reference:
+        reference?.trim() || null,
+
+      p_notes:
+        notes?.trim() || null,
+    }
+  );
+
+  // ------------------------------------------------------------
+  // ERROR
+  // ------------------------------------------------------------
 
   if (error) {
     console.error(
@@ -255,9 +333,15 @@ export async function recordSalePayment(
 
     return {
       data: null,
-      error: new Error(error.message),
+      error: new Error(
+        error.message
+      ),
     };
   }
+
+  // ------------------------------------------------------------
+  // NO DATA
+  // ------------------------------------------------------------
 
   if (!data) {
     return {
@@ -275,83 +359,44 @@ export async function recordSalePayment(
 }
 
 /**
- * Get individual payments for a sale.
- */
-export async function getSalePayments(
-  saleId: string
-) {
-  if (!saleId) {
-    return {
-      data: null,
-      error: new Error(
-        "Sale ID is required."
-      ),
-    };
-  }
-
-  return supabase
-    .from("sale_payments")
-    .select(
-      `
-        id,
-        sale_id,
-        amount,
-        payment_method,
-        reference,
-        notes,
-        created_by,
-        created_at
-      `
-    )
-    .eq("sale_id", saleId)
-    .order("created_at", {
-      ascending: false,
-    });
-}
-
-/**
  * Delete a sale.
+ *
+ * Use this only if the database permissions allow it.
  */
 export async function deleteSale(
   saleId: string
 ): Promise<{
-  data: Sale | null;
+  success: boolean;
   error: Error | null;
 }> {
-  if (!saleId) {
+  if (!saleId?.trim()) {
     return {
-      data: null,
+      success: false,
       error: new Error(
         "Sale ID is required."
       ),
     };
   }
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("sales")
     .delete()
-    .eq("id", saleId)
-    .select()
-    .maybeSingle();
+    .eq("id", saleId.trim());
 
   if (error) {
+    console.error(
+      "deleteSale error:",
+      error
+    );
+
     return {
-      data: null,
+      success: false,
       error: new Error(error.message),
     };
   }
 
-  if (!data) {
-    return {
-      data: null,
-      error: new Error(
-        "Sale was not found or could not be deleted."
-      ),
-    };
-  }
-
   return {
-    data: data as Sale,
+    success: true,
     error: null,
   };
 }

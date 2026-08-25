@@ -1,28 +1,34 @@
 "use client";
 
 import {
+  FormEvent,
   useEffect,
   useMemo,
   useState,
 } from "react";
 
-import { createSale } from "@/services/sales";
 import { supabase } from "@/lib/supabase/client";
+import { getProducts } from "@/services/products";
+import { createSale } from "@/services/sales";
 
-interface Customer {
+import type { Product } from "@/types/product";
+import type { CreateSaleInput } from "@/types/sale";
+
+type Customer = {
   id: string;
   customer_name: string;
-}
+};
 
-interface Product {
-  id: string;
-  name: string;
-  category: string;
-  size: string;
-  price: number;
-}
+type PaymentMethod =
+  | "Cash"
+  | "Mobile Money"
+  | "Credit";
 
 export default function SalesForm() {
+  // ============================================================
+  // STATE
+  // ============================================================
+
   const [customers, setCustomers] =
     useState<Customer[]>([]);
 
@@ -36,10 +42,10 @@ export default function SalesForm() {
     useState("");
 
   const [quantity, setQuantity] =
-    useState("");
+    useState("1");
 
   const [paymentMethod, setPaymentMethod] =
-    useState("Cash");
+    useState<PaymentMethod>("Cash");
 
   const [loading, setLoading] =
     useState(true);
@@ -47,340 +53,523 @@ export default function SalesForm() {
   const [saving, setSaving] =
     useState(false);
 
-  const [successMessage, setSuccessMessage] =
-    useState("");
-
   const [errorMessage, setErrorMessage] =
     useState("");
 
+  const [successMessage, setSuccessMessage] =
+    useState("");
+
+  // ============================================================
+  // LOAD CUSTOMERS + PRODUCTS
+  // ============================================================
+
   useEffect(() => {
+    let cancelled = false;
+
     async function loadData() {
       setLoading(true);
       setErrorMessage("");
 
-      const [
-        customersResult,
-        productsResult,
-      ] = await Promise.all([
-        supabase
-          .from("customers")
-          .select(
-            "id, customer_name"
-          )
-          .order("customer_name"),
+      try {
+        const [
+          customersResult,
+          productsResult,
+        ] = await Promise.all([
+          supabase
+            .from("customers")
+            .select(
+              "id, customer_name"
+            )
+            .order("customer_name"),
 
-        supabase
-          .from("products")
-          .select(
-            "id, name, category, size, price"
-          )
-          .order("name"),
-      ]);
+          getProducts(),
+        ]);
 
-      if (customersResult.error) {
-        console.error(
-          "Customers error:",
-          customersResult.error
-        );
+        if (cancelled) {
+          return;
+        }
 
-        setErrorMessage(
-          customersResult.error.message
-        );
-      } else {
+        // --------------------------------------------------------
+        // CUSTOMER ERROR
+        // --------------------------------------------------------
+
+        if (customersResult.error) {
+          console.error(
+            "Customers error:",
+            {
+              message:
+                customersResult.error.message,
+              details:
+                customersResult.error.details,
+              hint:
+                customersResult.error.hint,
+              code:
+                customersResult.error.code,
+            }
+          );
+
+          setErrorMessage(
+            customersResult.error.message ||
+              "Unable to load customers."
+          );
+
+          setLoading(false);
+          return;
+        }
+
+        // --------------------------------------------------------
+        // PRODUCTS ERROR
+        // --------------------------------------------------------
+
+        if (productsResult.error) {
+          console.error(
+            "Products error:",
+            {
+              message:
+                productsResult.error.message,
+              details:
+                productsResult.error.details,
+              hint:
+                productsResult.error.hint,
+              code:
+                productsResult.error.code,
+            }
+          );
+
+          setErrorMessage(
+            productsResult.error.message ||
+              "Unable to load products."
+          );
+
+          setLoading(false);
+          return;
+        }
+
+        // --------------------------------------------------------
+        // SET DATA
+        // --------------------------------------------------------
+
         setCustomers(
           customersResult.data || []
         );
-      }
 
-      if (productsResult.error) {
-        console.error(
-          "Products error:",
-          productsResult.error
-        );
-
-        setErrorMessage(
-          productsResult.error.message
-        );
-      } else {
         setProducts(
           (productsResult.data ||
             []) as Product[]
         );
-      }
+      } catch (error) {
+        console.error(
+          "SalesForm loadData error:",
+          error
+        );
 
-      setLoading(false);
+        if (!cancelled) {
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Unable to load sales data."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
     }
 
     loadData();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  // ============================================================
+  // SELECTED PRODUCT
+  // ============================================================
 
   const selectedProduct = useMemo(() => {
     return products.find(
       (product) =>
         product.id === productId
     );
-  }, [products, productId]);
+  }, [
+    products,
+    productId,
+  ]);
 
-  const unitPrice = Number(
-    selectedProduct?.price || 0
-  );
+  // ============================================================
+  // NUMERIC VALUES
+  // ============================================================
 
   const quantityNumber = Number(
     quantity || 0
   );
 
-  const estimatedTotal =
-    quantityNumber * unitPrice;
+  const unitPrice = Number(
+    selectedProduct?.price || 0
+  );
+
+  const totalAmount =
+    Number.isFinite(quantityNumber) &&
+    quantityNumber > 0 &&
+    Number.isFinite(unitPrice)
+      ? quantityNumber * unitPrice
+      : 0;
+
+  // ============================================================
+  // FORM VALIDATION
+  // ============================================================
+
+  const validationError = useMemo(() => {
+    if (!customerName.trim()) {
+      return "Customer is required.";
+    }
+
+    if (!productId) {
+      return "Product is required.";
+    }
+
+    if (
+      !Number.isInteger(quantityNumber) ||
+      quantityNumber <= 0
+    ) {
+      return (
+        "Quantity must be a positive whole number."
+      );
+    }
+
+    if (!selectedProduct) {
+      return "Selected product was not found.";
+    }
+
+    if (
+      !Number.isFinite(unitPrice) ||
+      unitPrice <= 0
+    ) {
+      return (
+        "Selected product does not have a valid selling price."
+      );
+    }
+
+    if (!paymentMethod) {
+      return "Payment method is required.";
+    }
+
+    return "";
+  }, [
+    customerName,
+    productId,
+    quantityNumber,
+    selectedProduct,
+    unitPrice,
+    paymentMethod,
+  ]);
+
+  // ============================================================
+  // SUBMIT SALE
+  // ============================================================
 
   async function handleSubmit(
-    event: React.FormEvent<HTMLFormElement>
+    event: FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
 
     setErrorMessage("");
     setSuccessMessage("");
 
-    if (!customerName) {
+    if (validationError) {
       setErrorMessage(
-        "Please select a customer."
+        validationError
       );
       return;
     }
 
     if (!selectedProduct) {
       setErrorMessage(
-        "Please select a product."
-      );
-      return;
-    }
-
-    if (
-      !quantity ||
-      !Number.isInteger(quantityNumber) ||
-      quantityNumber <= 0
-    ) {
-      setErrorMessage(
-        "Please enter a valid whole-number quantity."
-      );
-      return;
-    }
-
-    if (unitPrice <= 0) {
-      setErrorMessage(
-        "The selected product does not have a valid price."
-      );
-      return;
-    }
-
-    if (!paymentMethod) {
-      setErrorMessage(
-        "Please select a payment method."
+        "Please select a valid product."
       );
       return;
     }
 
     setSaving(true);
 
-    const {
-      data,
-      error,
-    } = await createSale({
-      customer_name:
-        customerName,
+    try {
+      const input: CreateSaleInput = {
+        customer_name:
+          customerName.trim(),
 
-      product_id:
-        selectedProduct.id,
+        product_id:
+          selectedProduct.id,
 
-      quantity:
-        quantityNumber,
+        quantity:
+          quantityNumber,
 
-      payment_method:
-        paymentMethod,
-    });
+        payment_method:
+          paymentMethod,
+      };
 
-    if (error) {
+      const result =
+        await createSale(input);
+
+      if (result.error) {
+        console.error(
+          "Sale creation error:",
+          result.error
+        );
+
+        setErrorMessage(
+          result.error.message ||
+            "Unable to create sale."
+        );
+
+        return;
+      }
+
+      if (!result.data) {
+        setErrorMessage(
+          "Sale was created, but no sale record was returned."
+        );
+
+        return;
+      }
+
+      // --------------------------------------------------------
+      // SUCCESS
+      // --------------------------------------------------------
+
+      setSuccessMessage(
+        `Sale created successfully. Total: GH₵${Number(
+          result.data.total_amount
+        ).toFixed(2)}`
+      );
+
+      // --------------------------------------------------------
+      // RESET FORM
+      // --------------------------------------------------------
+
+      setCustomerName("");
+      setProductId("");
+      setQuantity("1");
+      setPaymentMethod("Cash");
+    } catch (error) {
       console.error(
-        "Sale error:",
+        "Unexpected sale error:",
         error
       );
 
       setErrorMessage(
-        error.message
+        error instanceof Error
+          ? error.message
+          : "An unexpected error occurred while creating the sale."
       );
-
+    } finally {
       setSaving(false);
-      return;
     }
-
-    if (!data) {
-      setErrorMessage(
-        "Sale was created, but no sale information was returned."
-      );
-
-      setSaving(false);
-      return;
-    }
-
-    const totalAmount = Number(
-      data.total_amount || 0
-    );
-
-    const amountPaid = Number(
-      data.amount_paid || 0
-    );
-
-    const balanceDue = Number(
-      data.balance_due || 0
-    );
-
-    let status = "Unpaid";
-
-    if (
-      amountPaid >= totalAmount &&
-      totalAmount > 0
-    ) {
-      status = "Paid";
-    } else if (
-      amountPaid > 0 &&
-      balanceDue > 0
-    ) {
-      status = "Partially Paid";
-    }
-
-    setSuccessMessage(
-      `Sale saved successfully.\n\n` +
-        `Total: GH₵${totalAmount.toFixed(2)}\n` +
-        `Paid: GH₵${amountPaid.toFixed(2)}\n` +
-        `Balance: GH₵${balanceDue.toFixed(2)}\n` +
-        `Status: ${status}`
-    );
-
-    setCustomerName("");
-    setProductId("");
-    setQuantity("");
-    setPaymentMethod("Cash");
-
-    setSaving(false);
   }
+
+  // ============================================================
+  // LOADING
+  // ============================================================
 
   if (loading) {
     return (
-      <div className="rounded-lg bg-white p-6 shadow">
-        <p>
-          Loading customers and products...
+      <div className="rounded-lg border bg-white p-6">
+        <p className="text-sm text-gray-600">
+          Loading sales form...
         </p>
       </div>
     );
   }
 
+  // ============================================================
+  // UI
+  // ============================================================
+
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-5 rounded-lg bg-white p-6 shadow"
+      className="space-y-6 rounded-xl border bg-white p-6 shadow-sm"
     >
       <div>
-        <label className="mb-2 block font-medium">
+        <h2 className="text-xl font-semibold">
+          Create Sale
+        </h2>
+
+        <p className="mt-1 text-sm text-gray-500">
+          Record a block sale and update
+          inventory automatically.
+        </p>
+      </div>
+
+      {/* ========================================================
+          ERROR
+      ======================================================== */}
+
+      {errorMessage && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+        >
+          <strong className="font-semibold">
+            Error:
+          </strong>{" "}
+          {errorMessage}
+        </div>
+      )}
+
+      {/* ========================================================
+          SUCCESS
+      ======================================================== */}
+
+      {successMessage && (
+        <div
+          role="status"
+          className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700"
+        >
+          {successMessage}
+        </div>
+      )}
+
+      {/* ========================================================
+          CUSTOMER
+      ======================================================== */}
+
+      <div className="space-y-2">
+        <label
+          htmlFor="customer"
+          className="block text-sm font-medium text-gray-700"
+        >
           Customer
         </label>
 
         <select
+          id="customer"
           value={customerName}
           onChange={(event) =>
             setCustomerName(
               event.target.value
             )
           }
-          className="w-full rounded border p-3"
-          required
+          disabled={saving}
+          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-500"
         >
           <option value="">
             Select customer
           </option>
 
-          {customers.map((customer) => (
-            <option
-              key={customer.id}
-              value={
-                customer.customer_name
-              }
-            >
-              {customer.customer_name}
-            </option>
-          ))}
+          {customers.map(
+            (customer) => (
+              <option
+                key={customer.id}
+                value={
+                  customer.customer_name
+                }
+              >
+                {customer.customer_name}
+              </option>
+            )
+          )}
         </select>
-
-        {customers.length === 0 && (
-          <p className="mt-2 text-sm text-red-600">
-            No customers found. Add a
-            customer before recording a
-            sale.
-          </p>
-        )}
       </div>
 
-      <div>
-        <label className="mb-2 block font-medium">
+      {/* ========================================================
+          PRODUCT
+      ======================================================== */}
+
+      <div className="space-y-2">
+        <label
+          htmlFor="product"
+          className="block text-sm font-medium text-gray-700"
+        >
           Product
         </label>
 
         <select
+          id="product"
           value={productId}
           onChange={(event) =>
             setProductId(
               event.target.value
             )
           }
-          className="w-full rounded border p-3"
-          required
+          disabled={saving}
+          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-500"
         >
           <option value="">
             Select product
           </option>
 
-          {products.map((product) => (
-            <option
-              key={product.id}
-              value={product.id}
-            >
-              {product.name} — GH₵
-              {Number(
-                product.price
-              ).toLocaleString()}
-            </option>
-          ))}
+          {products.map(
+            (product) => (
+              <option
+                key={product.id}
+                value={product.id}
+              >
+                {product.name} — GH₵
+                {Number(
+                  product.price
+                ).toFixed(2)}
+              </option>
+            )
+          )}
         </select>
-
-        {products.length === 0 && (
-          <p className="mt-2 text-sm text-red-600">
-            No products found. Add products
-            before recording a sale.
-          </p>
-        )}
       </div>
+
+      {/* ========================================================
+          SELECTED PRODUCT INFORMATION
+      ======================================================== */}
 
       {selectedProduct && (
         <div className="rounded-lg bg-gray-50 p-4">
-          <p className="text-sm text-gray-600">
-            Selected Product
-          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <p className="text-xs text-gray-500">
+                Product
+              </p>
 
-          <p className="font-semibold">
-            {selectedProduct.name}
-          </p>
+              <p className="font-medium">
+                {selectedProduct.name}
+              </p>
+            </div>
 
-          <p className="text-sm text-gray-600">
-            {selectedProduct.category}{" "}
-            • {selectedProduct.size}
-          </p>
+            <div>
+              <p className="text-xs text-gray-500">
+                Category
+              </p>
+
+              <p className="font-medium">
+                {selectedProduct.category}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs text-gray-500">
+                Size
+              </p>
+
+              <p className="font-medium">
+                {selectedProduct.size}
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
-      <div>
-        <label className="mb-2 block font-medium">
+      {/* ========================================================
+          QUANTITY
+      ======================================================== */}
+
+      <div className="space-y-2">
+        <label
+          htmlFor="quantity"
+          className="block text-sm font-medium text-gray-700"
+        >
           Quantity
         </label>
 
         <input
+          id="quantity"
           type="number"
           min="1"
           step="1"
@@ -390,52 +579,59 @@ export default function SalesForm() {
               event.target.value
             )
           }
-          className="w-full rounded border p-3"
-          placeholder="Enter quantity"
-          required
+          disabled={saving}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500"
         />
       </div>
 
-      <div>
-        <label className="mb-2 block font-medium">
+      {/* ========================================================
+          UNIT PRICE
+      ======================================================== */}
+
+      <div className="space-y-2">
+        <label
+          htmlFor="unit-price"
+          className="block text-sm font-medium text-gray-700"
+        >
           Unit Price
         </label>
 
-        <div className="rounded border bg-gray-50 p-3">
-          GH₵
-          {unitPrice.toLocaleString()}
-        </div>
-
-        <p className="mt-1 text-xs text-gray-500">
-          Price comes from the current
-          product price.
-        </p>
+        <input
+          id="unit-price"
+          type="text"
+          value={
+            selectedProduct
+              ? `GH₵${unitPrice.toFixed(2)}`
+              : "GH₵0.00"
+          }
+          readOnly
+          className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
+        />
       </div>
 
-      <div>
-        <label className="mb-2 block font-medium">
-          Estimated Total
-        </label>
+      {/* ========================================================
+          PAYMENT METHOD
+      ======================================================== */}
 
-        <div className="rounded border bg-gray-50 p-3">
-          GH₵
-          {estimatedTotal.toLocaleString()}
-        </div>
-      </div>
-
-      <div>
-        <label className="mb-2 block font-medium">
+      <div className="space-y-2">
+        <label
+          htmlFor="payment-method"
+          className="block text-sm font-medium text-gray-700"
+        >
           Payment Method
         </label>
 
         <select
+          id="payment-method"
           value={paymentMethod}
           onChange={(event) =>
             setPaymentMethod(
-              event.target.value
+              event.target
+                .value as PaymentMethod
             )
           }
-          className="w-full rounded border p-3"
+          disabled={saving}
+          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-gray-500"
         >
           <option value="Cash">
             Cash
@@ -445,45 +641,73 @@ export default function SalesForm() {
             Mobile Money
           </option>
 
-          <option value="Bank Transfer">
-            Bank Transfer
-          </option>
-
-          <option value="Cheque">
-            Cheque
-          </option>
-
           <option value="Credit">
             Credit
           </option>
         </select>
       </div>
 
-      {errorMessage && (
-        <div className="whitespace-pre-line rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-          {errorMessage}
-        </div>
-      )}
+      {/* ========================================================
+          TOTAL
+      ======================================================== */}
 
-      {successMessage && (
-        <div className="whitespace-pre-line rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
-          {successMessage}
+      <div className="rounded-lg border bg-gray-50 p-5">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-600">
+            Quantity
+          </span>
+
+          <span className="font-medium">
+            {Number.isInteger(
+              quantityNumber
+            ) &&
+            quantityNumber > 0
+              ? quantityNumber
+              : 0}
+          </span>
         </div>
-      )}
+
+        <div className="mt-3 flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-600">
+            Unit Price
+          </span>
+
+          <span className="font-medium">
+            GH₵
+            {unitPrice.toFixed(2)}
+          </span>
+        </div>
+
+        <div className="mt-4 border-t pt-4">
+          <div className="flex items-center justify-between">
+            <span className="text-lg font-semibold">
+              Total
+            </span>
+
+            <span className="text-2xl font-bold">
+              GH₵
+              {totalAmount.toFixed(2)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================
+          SUBMIT
+      ======================================================== */}
 
       <button
         type="submit"
         disabled={
           saving ||
           loading ||
-          customers.length === 0 ||
-          products.length === 0
+          !!validationError
         }
-        className="w-full rounded-lg bg-blue-600 px-5 py-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full rounded-lg bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {saving
-          ? "Saving Sale..."
-          : "Save Sale"}
+          ? "Creating Sale..."
+          : "Create Sale"}
       </button>
     </form>
   );

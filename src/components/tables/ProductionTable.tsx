@@ -1,99 +1,472 @@
 "use client";
 
-import type { ProductionRecord } from "@/types/production";
+import type { Production } from "@/types/production";
 
-interface ProductionTableProps {
-  records: ProductionRecord[];
+type ProductionTableProps = {
+  records: Production[];
+  loading?: boolean;
+};
+
+function formatNumber(
+  value: number | null | undefined,
+  decimals = 2
+): string {
+  const number = Number(value ?? 0);
+
+  if (!Number.isFinite(number)) {
+    return "0";
+  }
+
+  return number.toLocaleString("en-GH", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+function formatDate(
+  value: string | null | undefined
+): string {
+  if (!value) {
+    return "—";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleString("en-GH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 export default function ProductionTable({
   records,
+  loading = false,
 }: ProductionTableProps) {
+  if (loading) {
+    return (
+      <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-[1400px] w-full text-sm">
+            <thead className="border-b bg-gray-50">
+              <tr>
+                {[
+                  "Date",
+                  "Product",
+                  "Quantity",
+                  "Cement",
+                  "Chippings",
+                  "Quarry Dust",
+                  "Water",
+                  "Total Cost",
+                  "Cost / Block",
+                ].map((heading) => (
+                  <th
+                    key={heading}
+                    className="whitespace-nowrap p-3 text-left font-semibold"
+                  >
+                    {heading}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {Array.from({ length: 5 }).map(
+                (_, row) => (
+                  <tr
+                    key={row}
+                    className="border-b"
+                  >
+                    {Array.from({
+                      length: 9,
+                    }).map((_, column) => (
+                      <td
+                        key={column}
+                        className="p-3"
+                      >
+                        <div className="h-4 animate-pulse rounded bg-gray-200" />
+                      </td>
+                    ))}
+                  </tr>
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  if (!records || records.length === 0) {
+    return (
+      <div className="rounded-xl border bg-white p-8 text-center shadow-sm">
+        <h3 className="font-semibold">
+          No production records
+        </h3>
+
+        <p className="mt-1 text-sm text-gray-500">
+          Production records will appear here
+          after production is recorded.
+        </p>
+      </div>
+    );
+  }
+
+  const totalQuantity = records.reduce(
+    (total, record) =>
+      total + Number(record.quantity ?? 0),
+    0
+  );
+
+  const totalCement = records.reduce(
+    (total, record) =>
+      total +
+      Number(record.cement_used ?? 0),
+    0
+  );
+
+  const totalChippings = records.reduce(
+    (total, record) =>
+      total +
+      Number(record.chippings_used ?? 0),
+    0
+  );
+
+  const totalQuarryDust = records.reduce(
+    (total, record) =>
+      total +
+      Number(record.quarry_dust_used ?? 0),
+    0
+  );
+
+  const totalWater = records.reduce(
+    (total, record) =>
+      total +
+      Number(record.water_used ?? 0),
+    0
+  );
+
+  const totalProductionCost =
+    records.reduce(
+      (total, record) =>
+        total +
+        Number(
+          record.total_production_cost ?? 0
+        ),
+      0
+    );
+
+  const weightedCostPerBlock =
+    totalQuantity > 0
+      ? totalProductionCost /
+        totalQuantity
+      : 0;
+
   return (
-    <div className="overflow-x-auto rounded-lg bg-white shadow">
-      <table className="w-full border-collapse">
-        <thead>
-          <tr className="border-b bg-gray-100">
-            <th className="p-3 text-left">
-              Product
-            </th>
+    <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+      {/* Header */}
+      <div className="border-b px-4 py-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-semibold">
+              Production Records
+            </h2>
 
-            <th className="p-3 text-left">
-              Quantity
-            </th>
+            <p className="mt-1 text-sm text-gray-500">
+              Detailed production batches and
+              production costs.
+            </p>
+          </div>
 
-            <th className="p-3 text-left">
-              Cement
-            </th>
+          <div className="text-sm text-gray-500">
+            {records.length.toLocaleString(
+              "en-GH"
+            )}{" "}
+            {records.length === 1
+              ? "batch"
+              : "batches"}
+          </div>
+        </div>
+      </div>
 
-            <th className="p-3 text-left">
-              Sand
-            </th>
-
-            <th className="p-3 text-left">
-              Quarry Dust
-            </th>
-
-            <th className="p-3 text-left">
-              Water
-            </th>
-
-            <th className="p-3 text-left">
-              Date
-            </th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {records.length === 0 ? (
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="min-w-[1400px] w-full text-sm">
+          <thead className="border-b bg-gray-50">
             <tr>
-              <td
-                colSpan={7}
-                className="p-6 text-center text-gray-500"
-              >
-                No production records found.
-              </td>
+              <th className="whitespace-nowrap p-3 text-left font-semibold">
+                Date
+              </th>
+
+              <th className="whitespace-nowrap p-3 text-left font-semibold">
+                Product
+              </th>
+
+              <th className="whitespace-nowrap p-3 text-right font-semibold">
+                Quantity
+              </th>
+
+              <th className="whitespace-nowrap p-3 text-right font-semibold">
+                Cement
+              </th>
+
+              <th className="whitespace-nowrap p-3 text-right font-semibold">
+                Chippings
+              </th>
+
+              <th className="whitespace-nowrap p-3 text-right font-semibold">
+                Quarry Dust
+              </th>
+
+              <th className="whitespace-nowrap p-3 text-right font-semibold">
+                Water
+              </th>
+
+              <th className="whitespace-nowrap p-3 text-right font-semibold">
+                Cement Cost
+              </th>
+
+              <th className="whitespace-nowrap p-3 text-right font-semibold">
+                Chippings Cost
+              </th>
+
+              <th className="whitespace-nowrap p-3 text-right font-semibold">
+                Quarry Dust Cost
+              </th>
+
+              <th className="whitespace-nowrap p-3 text-right font-semibold">
+                Water Cost
+              </th>
+
+              <th className="whitespace-nowrap p-3 text-right font-semibold">
+                Total Cost
+              </th>
+
+              <th className="whitespace-nowrap p-3 text-right font-semibold">
+                Cost / Block
+              </th>
             </tr>
-          ) : (
-            records.map((item) => (
+          </thead>
+
+          <tbody className="divide-y">
+            {records.map((record) => (
               <tr
-                key={item.id}
-                className="border-b"
+                key={record.id}
+                className="hover:bg-gray-50"
               >
-                <td className="p-3">
-                  {item.product_name}
+                {/* Date */}
+                <td className="whitespace-nowrap p-3 text-gray-600">
+                  {formatDate(
+                    record.created_at
+                  )}
                 </td>
 
-                <td className="p-3">
-                  {item.quantity}
+                {/* Product */}
+                <td className="whitespace-nowrap p-3 font-medium">
+                  {record.product_name}
                 </td>
 
-                <td className="p-3">
-                  {item.cement_used ?? 0}
+                {/* Quantity */}
+                <td className="whitespace-nowrap p-3 text-right font-semibold">
+                  {formatNumber(
+                    record.quantity,
+                    0
+                  )}
                 </td>
 
-                <td className="p-3">
-                  {item.sand_used ?? 0}
+                {/* Cement */}
+                <td className="whitespace-nowrap p-3 text-right">
+                  {formatNumber(
+                    record.cement_used
+                  )}{" "}
+                  bag
                 </td>
 
-                <td className="p-3">
-                  {item.quarry_dust_used ?? 0}
+                {/* Chippings */}
+                <td className="whitespace-nowrap p-3 text-right">
+                  {formatNumber(
+                    record.chippings_used
+                  )}{" "}
+                  m³
                 </td>
 
-                <td className="p-3">
-                  {item.water_used ?? 0}
+                {/* Quarry Dust */}
+                <td className="whitespace-nowrap p-3 text-right">
+                  {formatNumber(
+                    record.quarry_dust_used
+                  )}{" "}
+                  m³
                 </td>
 
-                <td className="p-3">
-                  {new Date(
-                    item.created_at
-                  ).toLocaleDateString()}
+                {/* Water */}
+                <td className="whitespace-nowrap p-3 text-right">
+                  {formatNumber(
+                    record.water_used
+                  )}{" "}
+                  L
+                </td>
+
+                {/* Cement Cost */}
+                <td className="whitespace-nowrap p-3 text-right">
+                  GH₵
+                  {formatNumber(
+                    record.cement_cost
+                  )}
+                </td>
+
+                {/* Chippings Cost */}
+                <td className="whitespace-nowrap p-3 text-right">
+                  GH₵
+                  {formatNumber(
+                    record.chippings_cost
+                  )}
+                </td>
+
+                {/* Quarry Dust Cost */}
+                <td className="whitespace-nowrap p-3 text-right">
+                  GH₵
+                  {formatNumber(
+                    record.quarry_dust_cost
+                  )}
+                </td>
+
+                {/* Water Cost */}
+                <td className="whitespace-nowrap p-3 text-right">
+                  GH₵
+                  {formatNumber(
+                    record.water_cost
+                  )}
+                </td>
+
+                {/* Total Cost */}
+                <td className="whitespace-nowrap p-3 text-right font-semibold">
+                  GH₵
+                  {formatNumber(
+                    record.total_production_cost
+                  )}
+                </td>
+
+                {/* Cost Per Block */}
+                <td className="whitespace-nowrap p-3 text-right font-semibold">
+                  GH₵
+                  {formatNumber(
+                    record.cost_per_block
+                  )}
                 </td>
               </tr>
-            ))
+            ))}
+          </tbody>
+
+          {/* Totals */}
+          <tfoot className="border-t bg-gray-50">
+            <tr>
+              <td
+                colSpan={2}
+                className="whitespace-nowrap p-3 font-bold"
+              >
+                Total
+              </td>
+
+              <td className="whitespace-nowrap p-3 text-right font-bold">
+                {formatNumber(
+                  totalQuantity,
+                  0
+                )}
+              </td>
+
+              <td className="whitespace-nowrap p-3 text-right font-semibold">
+                {formatNumber(
+                  totalCement
+                )}{" "}
+                bags
+              </td>
+
+              <td className="whitespace-nowrap p-3 text-right font-semibold">
+                {formatNumber(
+                  totalChippings
+                )}{" "}
+                m³
+              </td>
+
+              <td className="whitespace-nowrap p-3 text-right font-semibold">
+                {formatNumber(
+                  totalQuarryDust
+                )}{" "}
+                m³
+              </td>
+
+              <td className="whitespace-nowrap p-3 text-right font-semibold">
+                {formatNumber(
+                  totalWater
+                )}{" "}
+                L
+              </td>
+
+              <td className="p-3 text-right">
+                —
+              </td>
+
+              <td className="p-3 text-right">
+                —
+              </td>
+
+              <td className="p-3 text-right">
+                —
+              </td>
+
+              <td className="p-3 text-right">
+                —
+              </td>
+
+              <td className="whitespace-nowrap p-3 text-right font-bold">
+                GH₵
+                {formatNumber(
+                  totalProductionCost
+                )}
+              </td>
+
+              <td className="whitespace-nowrap p-3 text-right font-bold">
+                GH₵
+                {formatNumber(
+                  weightedCostPerBlock
+                )}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* Footer */}
+      <div className="border-t bg-gray-50 px-4 py-3 text-xs text-gray-500">
+        Total production:{" "}
+        <span className="font-semibold text-gray-700">
+          {formatNumber(
+            totalQuantity,
+            0
+          )}{" "}
+          blocks
+        </span>
+        {" • "}
+        Total production cost:{" "}
+        <span className="font-semibold text-gray-700">
+          GH₵
+          {formatNumber(
+            totalProductionCost
           )}
-        </tbody>
-      </table>
+        </span>
+        {" • "}
+        Weighted cost per block:{" "}
+        <span className="font-semibold text-gray-700">
+          GH₵
+          {formatNumber(
+            weightedCostPerBlock
+          )}
+        </span>
+      </div>
     </div>
   );
 }

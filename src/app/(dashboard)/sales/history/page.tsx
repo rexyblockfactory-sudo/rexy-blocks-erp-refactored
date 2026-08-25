@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import {
@@ -298,16 +299,34 @@ export default function SalesHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">
-          Sales History
-        </h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+  <div>
+    <h1 className="text-3xl font-bold">
+      Sales History
+    </h1>
 
-        <p className="mt-1 text-gray-600">
-          View sales and collect outstanding
-          customer payments.
-        </p>
-      </div>
+    <p className="mt-1 text-gray-600">
+      View sales and collect outstanding
+      customer payments.
+    </p>
+  </div>
+
+  <div className="flex gap-3">
+    <Link
+      href="/sales"
+      className="rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+    >
+      Back to Sales
+    </Link>
+
+    <Link
+      href="/sales/new"
+      className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+    >
+      New Sale
+    </Link>
+  </div>
+</div>
 
       {error && (
         <div className="whitespace-pre-line rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">

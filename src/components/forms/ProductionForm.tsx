@@ -3,6 +3,13 @@
 import { useState } from "react";
 import { createProduction } from "@/services/production";
 
+const PRODUCTS = [
+  "5-inch Solid Block",
+  "6-inch Solid Block",
+  "5-inch Hollow Block",
+  "6-inch Hollow Block",
+];
+
 export default function ProductionForm() {
   const [productName, setProductName] =
     useState("");
@@ -13,7 +20,7 @@ export default function ProductionForm() {
   const [cementUsed, setCementUsed] =
     useState("");
 
-  const [sandUsed, setSandUsed] =
+  const [chippingsUsed, setChippingsUsed] =
     useState("");
 
   const [quarryDustUsed, setQuarryDustUsed] =
@@ -31,19 +38,27 @@ export default function ProductionForm() {
     e.preventDefault();
 
     if (!productName.trim()) {
-      alert("Please enter the product name.");
+      alert("Please select a product.");
       return;
     }
 
-    const quantityNumber = Number(quantity);
-    const cementNumber = Number(cementUsed);
-    const sandNumber = Number(sandUsed);
+    const quantityNumber =
+      Number(quantity);
+
+    const cementNumber =
+      Number(cementUsed);
+
+    const chippingsNumber =
+      Number(chippingsUsed);
+
     const quarryDustNumber =
       Number(quarryDustUsed);
-    const waterNumber = Number(waterUsed);
+
+    const waterNumber =
+      Number(waterUsed);
 
     if (
-      !quantity ||
+      !Number.isInteger(quantityNumber) ||
       quantityNumber <= 0
     ) {
       alert(
@@ -53,7 +68,7 @@ export default function ProductionForm() {
     }
 
     if (
-      !cementUsed ||
+      !Number.isFinite(cementNumber) ||
       cementNumber < 0
     ) {
       alert(
@@ -63,17 +78,17 @@ export default function ProductionForm() {
     }
 
     if (
-      !sandUsed ||
-      sandNumber < 0
+      !Number.isFinite(chippingsNumber) ||
+      chippingsNumber < 0
     ) {
       alert(
-        "Please enter a valid sand quantity."
+        "Please enter a valid chippings quantity."
       );
       return;
     }
 
     if (
-      !quarryDustUsed ||
+      !Number.isFinite(quarryDustNumber) ||
       quarryDustNumber < 0
     ) {
       alert(
@@ -83,7 +98,7 @@ export default function ProductionForm() {
     }
 
     if (
-      !waterUsed ||
+      !Number.isFinite(waterNumber) ||
       waterNumber < 0
     ) {
       alert(
@@ -94,41 +109,62 @@ export default function ProductionForm() {
 
     setSaving(true);
 
-    const { error } =
-      await createProduction({
-        product_name:
-          productName.trim(),
-        quantity: quantityNumber,
-        cement_used: cementNumber,
-        sand_used: sandNumber,
-        quarry_dust_used:
-          quarryDustNumber,
-        water_used: waterNumber,
-      });
+    try {
+      const { error } =
+        await createProduction({
+          product_name:
+            productName.trim(),
 
-    if (error) {
+          quantity:
+            quantityNumber,
+
+          cement_used:
+            cementNumber,
+
+          chippings_used:
+            chippingsNumber,
+
+          quarry_dust_used:
+            quarryDustNumber,
+
+          water_used:
+            waterNumber,
+        });
+
+      if (error) {
+        console.error(
+          "Production error:",
+          error
+        );
+
+        alert(error.message);
+        return;
+      }
+
+      alert(
+        "Production saved successfully."
+      );
+
+      setProductName("");
+      setQuantity("");
+      setCementUsed("");
+      setChippingsUsed("");
+      setQuarryDustUsed("");
+      setWaterUsed("");
+    } catch (error) {
       console.error(
         "Production error:",
         error
       );
 
-      alert(error.message);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to save production."
+      );
+    } finally {
       setSaving(false);
-      return;
     }
-
-    alert(
-      "Production saved successfully."
-    );
-
-    setProductName("");
-    setQuantity("");
-    setCementUsed("");
-    setSandUsed("");
-    setQuarryDustUsed("");
-    setWaterUsed("");
-
-    setSaving(false);
   }
 
   return (
@@ -136,29 +172,51 @@ export default function ProductionForm() {
       onSubmit={handleSubmit}
       className="space-y-5 rounded-lg bg-white p-6 shadow"
     >
+      {/* Product */}
       <div>
-        <label className="mb-2 block font-medium">
+        <label
+          htmlFor="productName"
+          className="mb-2 block font-medium"
+        >
           Product Name
         </label>
 
-        <input
-          type="text"
+        <select
+          id="productName"
           value={productName}
           onChange={(e) =>
             setProductName(e.target.value)
           }
           className="w-full rounded border p-3"
-          placeholder="Example: 5-inch hollow block"
+          disabled={saving}
           required
-        />
+        >
+          <option value="">
+            Select product
+          </option>
+
+          {PRODUCTS.map((product) => (
+            <option
+              key={product}
+              value={product}
+            >
+              {product}
+            </option>
+          ))}
+        </select>
       </div>
 
+      {/* Quantity */}
       <div>
-        <label className="mb-2 block font-medium">
+        <label
+          htmlFor="quantity"
+          className="mb-2 block font-medium"
+        >
           Quantity Produced
         </label>
 
         <input
+          id="quantity"
           type="number"
           min="1"
           step="1"
@@ -168,86 +226,160 @@ export default function ProductionForm() {
           }
           className="w-full rounded border p-3"
           placeholder="Enter quantity"
+          disabled={saving}
           required
         />
       </div>
 
+      {/* Cement */}
       <div>
-        <label className="mb-2 block font-medium">
+        <label
+          htmlFor="cementUsed"
+          className="mb-2 block font-medium"
+        >
           Cement Used
         </label>
 
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={cementUsed}
-          onChange={(e) =>
-            setCementUsed(e.target.value)
-          }
-          className="w-full rounded border p-3"
-          placeholder="Enter cement used"
-          required
-        />
+        <div className="relative">
+          <input
+            id="cementUsed"
+            type="number"
+            min="0"
+            step="0.01"
+            value={cementUsed}
+            onChange={(e) =>
+              setCementUsed(
+                e.target.value
+              )
+            }
+            className="w-full rounded border p-3 pr-16"
+            placeholder="Enter cement used"
+            disabled={saving}
+            required
+          />
+
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
+            bags
+          </span>
+        </div>
+
+        <p className="mt-1 text-xs text-gray-500">
+          GH₵75 per bag
+        </p>
       </div>
 
+      {/* Chippings */}
       <div>
-        <label className="mb-2 block font-medium">
-          Sand Used
+        <label
+          htmlFor="chippingsUsed"
+          className="mb-2 block font-medium"
+        >
+          Chippings Used
         </label>
 
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={sandUsed}
-          onChange={(e) =>
-            setSandUsed(e.target.value)
-          }
-          className="w-full rounded border p-3"
-          placeholder="Enter sand used"
-          required
-        />
+        <div className="relative">
+          <input
+            id="chippingsUsed"
+            type="number"
+            min="0"
+            step="0.01"
+            value={chippingsUsed}
+            onChange={(e) =>
+              setChippingsUsed(
+                e.target.value
+              )
+            }
+            className="w-full rounded border p-3 pr-16"
+            placeholder="Enter chippings used"
+            disabled={saving}
+            required
+          />
+
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
+            m³
+          </span>
+        </div>
+
+        <p className="mt-1 text-xs text-gray-500">
+          GH₵235 per m³
+        </p>
       </div>
 
+      {/* Quarry Dust */}
       <div>
-        <label className="mb-2 block font-medium">
+        <label
+          htmlFor="quarryDustUsed"
+          className="mb-2 block font-medium"
+        >
           Quarry Dust Used
         </label>
 
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={quarryDustUsed}
-          onChange={(e) =>
-            setQuarryDustUsed(e.target.value)
-          }
-          className="w-full rounded border p-3"
-          placeholder="Enter quarry dust used"
-          required
-        />
+        <div className="relative">
+          <input
+            id="quarryDustUsed"
+            type="number"
+            min="0"
+            step="0.01"
+            value={quarryDustUsed}
+            onChange={(e) =>
+              setQuarryDustUsed(
+                e.target.value
+              )
+            }
+            className="w-full rounded border p-3 pr-16"
+            placeholder="Enter quarry dust used"
+            disabled={saving}
+            required
+          />
+
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
+            m³
+          </span>
+        </div>
+
+        <p className="mt-1 text-xs text-gray-500">
+          GH₵235 per m³
+        </p>
       </div>
 
+      {/* Water */}
       <div>
-        <label className="mb-2 block font-medium">
+        <label
+          htmlFor="waterUsed"
+          className="mb-2 block font-medium"
+        >
           Water Used
         </label>
 
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={waterUsed}
-          onChange={(e) =>
-            setWaterUsed(e.target.value)
-          }
-          className="w-full rounded border p-3"
-          placeholder="Enter water used"
-          required
-        />
+        <div className="relative">
+          <input
+            id="waterUsed"
+            type="number"
+            min="0"
+            step="0.01"
+            value={waterUsed}
+            onChange={(e) =>
+              setWaterUsed(
+                e.target.value
+              )
+            }
+            className="w-full rounded border p-3 pr-16"
+            placeholder="Enter water used"
+            disabled={saving}
+            required
+          />
+
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
+            L
+          </span>
+        </div>
+
+        <p className="mt-1 text-xs text-gray-500">
+          GH₵0.50 per litre
+        </p>
       </div>
 
+      {/* Submit */}
       <button
         type="submit"
         disabled={saving}

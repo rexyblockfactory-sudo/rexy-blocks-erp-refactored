@@ -16,7 +16,7 @@ export interface DashboardProductionRecord {
   product_name: string;
   quantity: number;
   cement_used: number;
-  sand_used: number;
+ chippings_used: number;
   quarry_dust_used: number;
   water_used: number;
 }
