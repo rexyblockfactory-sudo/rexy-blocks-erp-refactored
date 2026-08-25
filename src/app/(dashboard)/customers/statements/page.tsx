@@ -6,7 +6,9 @@ import {
   useMemo,
   useState,
 } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+
 import { supabase } from "@/lib/supabase/client";
 
 interface Customer {
@@ -58,101 +60,94 @@ function money(value: number) {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString(
-    "en-GH",
-    {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }
-  );
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleString("en-GH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
-/*
- * ============================================================
- * CUSTOMER STATEMENTS CONTENT
- * ============================================================
- *
- * This component uses useSearchParams().
- * It is rendered inside Suspense below.
- */
+function formatDateOnly(value: Date | null) {
+  if (!value) {
+    return "";
+  }
+
+  return value.toLocaleDateString("en-GH", {
+    dateStyle: "medium",
+  });
+}
+
 function CustomerStatementsContent() {
   const searchParams = useSearchParams();
 
   const customerFromUrl =
     searchParams.get("customer");
 
-  const [
-    customers,
-    setCustomers,
-  ] = useState<string[]>([]);
+  const [customers, setCustomers] =
+    useState<string[]>([]);
 
-  const [
-    selectedCustomer,
-    setSelectedCustomer,
-  ] = useState("");
+  const [selectedCustomer, setSelectedCustomer] =
+    useState("");
 
-  const [
-    sales,
-    setSales,
-  ] = useState<Sale[]>([]);
+  const [sales, setSales] =
+    useState<Sale[]>([]);
 
-  const [
-    payments,
-    setPayments,
-  ] = useState<Payment[]>([]);
+  const [payments, setPayments] =
+    useState<Payment[]>([]);
 
-  const [
-    loadingCustomers,
-    setLoadingCustomers,
-  ] = useState(true);
+  const [loadingCustomers, setLoadingCustomers] =
+    useState(true);
 
-  const [
-    loadingStatement,
-    setLoadingStatement,
-  ] = useState(false);
+  const [loadingStatement, setLoadingStatement] =
+    useState(false);
 
-  const [
-    errorMessage,
-    setErrorMessage,
-  ] = useState("");
+  const [errorMessage, setErrorMessage] =
+    useState("");
 
   /*
-   * ==========================================================
-   * LOAD CUSTOMER NAMES
-   * ==========================================================
+   * Keep the statement date in client state.
+   *
+   * This avoids generating different dates during
+   * server/client hydration.
+   */
+  const [statementDate, setStatementDate] =
+    useState<Date | null>(null);
+
+  useEffect(() => {
+    setStatementDate(new Date());
+  }, []);
+
+  /*
+   * Load customer names.
    */
   useEffect(() => {
     loadCustomers();
   }, []);
 
   /*
-   * ==========================================================
-   * OPEN CUSTOMER FROM URL
-   * ==========================================================
+   * If Customer Accounts sends us a customer
+   * through ?customer=..., automatically open
+   * that customer's statement.
    */
   useEffect(() => {
     if (
       customerFromUrl &&
       customers.includes(customerFromUrl)
     ) {
-      setSelectedCustomer(
-        customerFromUrl
-      );
+      setSelectedCustomer(customerFromUrl);
 
-      loadStatement(
-        customerFromUrl
-      );
+      loadStatement(customerFromUrl);
     }
   }, [
     customerFromUrl,
     customers,
   ]);
 
-  /*
-   * ==========================================================
-   * LOAD CUSTOMERS
-   * ==========================================================
-   */
   async function loadCustomers() {
     setLoadingCustomers(true);
     setErrorMessage("");
@@ -181,9 +176,7 @@ function CustomerStatementsContent() {
         );
 
       if (error) {
-        throw new Error(
-          error.message
-        );
+        throw new Error(error.message);
       }
 
       const uniqueCustomers = [
@@ -202,9 +195,7 @@ function CustomerStatementsContent() {
         ),
       ];
 
-      setCustomers(
-        uniqueCustomers
-      );
+      setCustomers(uniqueCustomers);
     } catch (error) {
       console.error(
         "Customer loading error:",
@@ -221,11 +212,6 @@ function CustomerStatementsContent() {
     }
   }
 
-  /*
-   * ==========================================================
-   * LOAD CUSTOMER STATEMENT
-   * ==========================================================
-   */
   async function loadStatement(
     customerName: string
   ) {
@@ -240,8 +226,11 @@ function CustomerStatementsContent() {
 
     try {
       /*
-       * Load customer's sales.
+       * --------------------------------------------------------
+       * LOAD SALES
+       * --------------------------------------------------------
        */
+
       const {
         data: salesData,
         error: salesError,
@@ -282,9 +271,11 @@ function CustomerStatementsContent() {
       setSales(saleRows);
 
       /*
-       * Get payment records belonging
-       * to those sales.
+       * --------------------------------------------------------
+       * LOAD PAYMENTS
+       * --------------------------------------------------------
        */
+
       const saleIds =
         saleRows.map(
           (sale) => sale.id
@@ -350,39 +341,28 @@ function CustomerStatementsContent() {
     }
   }
 
-  /*
-   * ==========================================================
-   * CUSTOMER CHANGE
-   * ==========================================================
-   */
   function handleCustomerChange(
     customerName: string
   ) {
-    setSelectedCustomer(
-      customerName
-    );
+    setSelectedCustomer(customerName);
 
-    loadStatement(
-      customerName
-    );
+    loadStatement(customerName);
   }
 
   /*
-   * ==========================================================
+   * ------------------------------------------------------------
    * BUILD CUSTOMER LEDGER
    *
    * Sales    = Debit
    * Payments = Credit
-   * ==========================================================
+   * ------------------------------------------------------------
    */
+
   const statementEntries =
     useMemo(() => {
       const entries: StatementEntry[] =
         [];
 
-      /*
-       * Sales.
-       */
       sales.forEach((sale) => {
         entries.push({
           id: `sale-${sale.id}`,
@@ -398,9 +378,6 @@ function CustomerStatementsContent() {
         });
       });
 
-      /*
-       * Payments.
-       */
       payments.forEach(
         (payment) => {
           const sale =
@@ -434,16 +411,12 @@ function CustomerStatementsContent() {
       );
 
       /*
-       * Sort transactions by actual time.
+       * Sort by actual transaction time.
        */
       entries.sort(
         (a, b) =>
-          new Date(
-            a.date
-          ).getTime() -
-          new Date(
-            b.date
-          ).getTime()
+          new Date(a.date).getTime() -
+          new Date(b.date).getTime()
       );
 
       /*
@@ -470,10 +443,11 @@ function CustomerStatementsContent() {
     ]);
 
   /*
-   * ==========================================================
-   * SUMMARY TOTALS
-   * ==========================================================
+   * ------------------------------------------------------------
+   * SUMMARY
+   * ------------------------------------------------------------
    */
+
   const totalSales =
     useMemo(
       () =>
@@ -484,8 +458,7 @@ function CustomerStatementsContent() {
           ) =>
             sum +
             Number(
-              sale.total_amount ||
-                0
+              sale.total_amount || 0
             ),
           0
         ),
@@ -502,8 +475,7 @@ function CustomerStatementsContent() {
           ) =>
             sum +
             Number(
-              payment.amount ||
-                0
+              payment.amount || 0
             ),
           0
         ),
@@ -531,56 +503,58 @@ function CustomerStatementsContent() {
         ? "Owing"
         : "No Sales";
 
-  /*
-   * ==========================================================
-   * PRINT
-   * ==========================================================
-   */
   function printStatement() {
     window.print();
   }
 
-  /*
-   * ==========================================================
-   * RENDER
-   * ==========================================================
-   */
   return (
     <main className="space-y-6 p-6">
-
-      {/* PAGE HEADER */}
+      {/* =====================================================
+          PAGE HEADER
+          ===================================================== */}
 
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between print:hidden">
-
         <div>
+          <div className="mb-4">
+            <Link
+              href="/customers/accounts"
+              className="inline-flex items-center gap-2 rounded-lg border bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50"
+            >
+              <span aria-hidden="true">
+                ←
+              </span>
+
+              Back to Customer Accounts
+            </Link>
+          </div>
+
           <h1 className="text-3xl font-bold">
             Customer Statements
           </h1>
 
           <p className="mt-1 text-gray-600">
             View customer sales,
-            payments, and
-            outstanding balances.
+            payments, and outstanding
+            balances.
           </p>
         </div>
 
         {selectedCustomer && (
           <button
             type="button"
-            onClick={
-              printStatement
-            }
-            className="rounded-lg bg-black px-4 py-2 text-white hover:bg-gray-800"
+            onClick={printStatement}
+            className="rounded-lg bg-black px-4 py-2 font-semibold text-white transition hover:bg-gray-800"
           >
             Print Statement
           </button>
         )}
       </div>
 
-      {/* CUSTOMER SELECTOR */}
+      {/* =====================================================
+          CUSTOMER SELECTOR
+          ===================================================== */}
 
       <div className="rounded-lg border bg-white p-5 shadow-sm print:hidden">
-
         <label
           htmlFor="customer"
           className="mb-2 block text-sm font-semibold"
@@ -590,18 +564,14 @@ function CustomerStatementsContent() {
 
         <select
           id="customer"
-          value={
-            selectedCustomer
-          }
+          value={selectedCustomer}
           onChange={(event) =>
             handleCustomerChange(
               event.target.value
             )
           }
-          disabled={
-            loadingCustomers
-          }
-          className="w-full rounded-lg border px-3 py-2 md:max-w-xl"
+          disabled={loadingCustomers}
+          className="w-full rounded-lg border px-3 py-2 outline-none transition focus:ring-2 md:max-w-xl"
         >
           <option value="">
             {loadingCustomers
@@ -622,7 +592,9 @@ function CustomerStatementsContent() {
         </select>
       </div>
 
-      {/* ERROR */}
+      {/* =====================================================
+          ERROR
+          ===================================================== */}
 
       {errorMessage && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 print:hidden">
@@ -636,7 +608,9 @@ function CustomerStatementsContent() {
         </div>
       )}
 
-      {/* EMPTY STATE */}
+      {/* =====================================================
+          EMPTY STATE
+          ===================================================== */}
 
       {!selectedCustomer &&
         !loadingStatement && (
@@ -646,7 +620,9 @@ function CustomerStatementsContent() {
           </div>
         )}
 
-      {/* LOADING */}
+      {/* =====================================================
+          LOADING
+          ===================================================== */}
 
       {loadingStatement && (
         <div className="rounded-lg border bg-white p-10 text-center print:hidden">
@@ -655,7 +631,9 @@ function CustomerStatementsContent() {
         </div>
       )}
 
-      {/* CUSTOMER STATEMENT */}
+      {/* =====================================================
+          CUSTOMER STATEMENT
+          ===================================================== */}
 
       {selectedCustomer &&
         !loadingStatement && (
@@ -663,7 +641,6 @@ function CustomerStatementsContent() {
             id="customer-statement"
             className="space-y-6"
           >
-
             {/* PRINT HEADER */}
 
             <div className="hidden print:block">
@@ -688,16 +665,13 @@ function CustomerStatementsContent() {
 
             <div className="rounded-lg border bg-white p-6 shadow-sm">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-
                 <div>
                   <p className="text-sm text-gray-500">
                     Customer
                   </p>
 
                   <h2 className="text-2xl font-bold">
-                    {
-                      selectedCustomer
-                    }
+                    {selectedCustomer}
                   </h2>
 
                   <p className="mt-1 text-gray-500">
@@ -712,12 +686,8 @@ function CustomerStatementsContent() {
                   </p>
 
                   <p className="font-semibold">
-                    {new Date().toLocaleDateString(
-                      "en-GH",
-                      {
-                        dateStyle:
-                          "medium",
-                      }
+                    {formatDateOnly(
+                      statementDate
                     )}
                   </p>
 
@@ -745,22 +715,20 @@ function CustomerStatementsContent() {
             {/* SUMMARY CARDS */}
 
             <div className="grid gap-4 md:grid-cols-3">
-
               <div className="rounded-lg border bg-white p-5 shadow-sm">
                 <p className="text-sm text-gray-500">
                   Total Sales
                 </p>
 
                 <p className="mt-2 text-2xl font-bold">
-                  {money(
-                    totalSales
-                  )}
+                  {money(totalSales)}
                 </p>
 
                 <p className="mt-1 text-xs text-gray-500">
                   {salesCount}{" "}
                   sale
-                  {salesCount === 1
+                  {salesCount ===
+                  1
                     ? ""
                     : "s"}
                 </p>
@@ -771,7 +739,7 @@ function CustomerStatementsContent() {
                   Total Payments
                 </p>
 
-                <p className="mt-2 text-2xl font-bold">
+                <p className="mt-2 text-2xl font-bold text-green-600">
                   {money(
                     totalPayments
                   )}
@@ -780,7 +748,8 @@ function CustomerStatementsContent() {
                 <p className="mt-1 text-xs text-gray-500">
                   {paymentsCount}{" "}
                   payment
-                  {paymentsCount === 1
+                  {paymentsCount ===
+                  1
                     ? ""
                     : "s"}
                 </p>
@@ -791,7 +760,7 @@ function CustomerStatementsContent() {
                   Outstanding Balance
                 </p>
 
-                <p className="mt-2 text-2xl font-bold">
+                <p className="mt-2 text-2xl font-bold text-red-600">
                   {money(
                     outstanding
                   )}
@@ -804,11 +773,12 @@ function CustomerStatementsContent() {
               </div>
             </div>
 
-            {/* LEDGER */}
+            {/* =================================================
+                LEDGER
+                ================================================= */}
 
             <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
               <table className="min-w-full">
-
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="whitespace-nowrap border-b p-3 text-left text-sm font-semibold">
@@ -963,13 +933,13 @@ function CustomerStatementsContent() {
                         )}
                       </td>
 
-                      <td className="whitespace-nowrap p-3 text-right font-bold">
+                      <td className="whitespace-nowrap p-3 text-right font-bold text-green-600">
                         {money(
                           totalPayments
                         )}
                       </td>
 
-                      <td className="whitespace-nowrap p-3 text-right font-bold">
+                      <td className="whitespace-nowrap p-3 text-right font-bold text-red-600">
                         {money(
                           outstanding
                         )}
@@ -980,7 +950,9 @@ function CustomerStatementsContent() {
               </table>
             </div>
 
-            {/* BALANCE NOTICE */}
+            {/* =================================================
+                BALANCE NOTICE
+                ================================================= */}
 
             <div
               className={`rounded-lg border p-5 ${
@@ -992,7 +964,8 @@ function CustomerStatementsContent() {
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="font-semibold">
-                    {outstanding > 0
+                    {outstanding >
+                    0
                       ? "Amount Outstanding"
                       : "Account Paid"}
                   </p>
@@ -1013,7 +986,9 @@ function CustomerStatementsContent() {
               </div>
             </div>
 
-            {/* PRINT FOOTER */}
+            {/* =================================================
+                PRINT FOOTER
+                ================================================= */}
 
             <div className="hidden border-t pt-6 text-sm text-gray-500 print:block">
               <p>
@@ -1034,7 +1009,9 @@ function CustomerStatementsContent() {
           </div>
         )}
 
-      {/* PRINT STYLES */}
+      {/* =====================================================
+          PRINT STYLES
+          ===================================================== */}
 
       <style jsx global>{`
         @media print {
@@ -1074,30 +1051,21 @@ function CustomerStatementsContent() {
 }
 
 /*
- * ============================================================
- * PAGE
- * ============================================================
+ * ------------------------------------------------------------
+ * SUSPENSE BOUNDARY
  *
- * Next.js 16 requires a Suspense boundary around the component
- * that calls useSearchParams().
+ * useSearchParams() requires a Suspense boundary
+ * during production builds in Next.js.
+ * ------------------------------------------------------------
  */
+
 export default function CustomerStatementsPage() {
   return (
     <Suspense
       fallback={
         <main className="space-y-6 p-6">
-          <div>
-            <h1 className="text-3xl font-bold">
-              Customer Statements
-            </h1>
-
-            <p className="mt-1 text-gray-600">
-              Loading customer statements...
-            </p>
-          </div>
-
-          <div className="rounded-lg border bg-white p-10 text-center text-gray-500 shadow-sm">
-            Loading...
+          <div className="rounded-lg border bg-white p-10 text-center text-gray-500">
+            Loading customer statements...
           </div>
         </main>
       }
