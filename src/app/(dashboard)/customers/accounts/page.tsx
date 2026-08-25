@@ -47,36 +47,41 @@ interface CustomerAccount {
   totalPayments: number;
   outstanding: number;
   outstandingSales: number;
+  lastSaleDate: string | null;
+  lastPaymentDate: string | null;
 }
 
 function money(value: number) {
-  return `GH₵${Number(value || 0).toLocaleString(
-    "en-GH",
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }
-  )}`;
+  return `GH₵${Number(value || 0).toLocaleString("en-GH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatDate(value: string | null) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleDateString("en-GH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default function CustomerAccountsPage() {
-  const [customers, setCustomers] =
-    useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
 
-  const [sales, setSales] =
-    useState<Sale[]>([]);
-
-  const [payments, setPayments] =
-    useState<Payment[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [errorMessage, setErrorMessage] =
-    useState("");
-
-  const [search, setSearch] =
-    useState("");
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     loadAccounts();
@@ -133,18 +138,15 @@ export default function CustomerAccountsPage() {
       }
 
       setCustomers(
-        (customersResult.data ||
-          []) as Customer[]
+        (customersResult.data || []) as Customer[]
       );
 
       setSales(
-        (salesResult.data ||
-          []) as Sale[]
+        (salesResult.data || []) as Sale[]
       );
 
       setPayments(
-        (paymentsResult.data ||
-          []) as Payment[]
+        (paymentsResult.data || []) as Payment[]
       );
     } catch (error) {
       console.error(
@@ -162,43 +164,45 @@ export default function CustomerAccountsPage() {
     }
   }
 
+  /*
+   * ------------------------------------------------------------
+   * PAYMENT TOTAL BY SALE
+   * ------------------------------------------------------------
+   */
+
   const paymentBySale = useMemo(() => {
-    const map = new Map<
-      string,
-      number
-    >();
+    const map = new Map<string, number>();
 
     payments.forEach((payment) => {
       const existing =
-        map.get(payment.sale_id) ||
-        0;
+        map.get(payment.sale_id) || 0;
 
       map.set(
         payment.sale_id,
-        existing +
-          Number(payment.amount || 0)
+        existing + Number(payment.amount || 0)
       );
     });
 
     return map;
   }, [payments]);
 
+  /*
+   * ------------------------------------------------------------
+   * CUSTOMER ACCOUNTS
+   * ------------------------------------------------------------
+   */
+
   const accounts = useMemo(() => {
-    const map = new Map<
-      string,
-      CustomerAccount
-    >();
+    const map = new Map<string, CustomerAccount>();
 
     /*
-     * Start with registered customers.
+     * Registered customers.
      */
     customers.forEach((customer) => {
       const name =
-        customer.customer_name.trim();
+        customer.customer_name?.trim();
 
-      if (!name) {
-        return;
-      }
+      if (!name) return;
 
       map.set(name.toLowerCase(), {
         id: customer.id,
@@ -211,20 +215,18 @@ export default function CustomerAccountsPage() {
         totalPayments: 0,
         outstanding: 0,
         outstandingSales: 0,
+        lastSaleDate: null,
+        lastPaymentDate: null,
       });
     });
 
     /*
-     * Add customers that exist in sales
-     * but are not currently in customers.
-     *
-     * This prevents historical sales from
-     * disappearing from Accounts.
+     * Historical sales may contain customers
+     * who are no longer in the customers table.
      */
     sales.forEach((sale) => {
       const name =
-        sale.customer_name?.trim() ||
-        "N/A";
+        sale.customer_name?.trim() || "N/A";
 
       const key = name.toLowerCase();
 
@@ -239,6 +241,8 @@ export default function CustomerAccountsPage() {
           totalPayments: 0,
           outstanding: 0,
           outstandingSales: 0,
+          lastSaleDate: null,
+          lastPaymentDate: null,
         });
       }
     });
@@ -248,125 +252,150 @@ export default function CustomerAccountsPage() {
      */
     sales.forEach((sale) => {
       const name =
-        sale.customer_name?.trim() ||
-        "N/A";
+        sale.customer_name?.trim() || "N/A";
 
       const key = name.toLowerCase();
 
-      const account =
-        map.get(key);
+      const account = map.get(key);
 
-      if (!account) {
-        return;
-      }
+      if (!account) return;
 
       const total =
-        Number(
-          sale.total_amount || 0
-        );
-
-      const ledgerPayment =
-        paymentBySale.has(sale.id)
-          ? paymentBySale.get(
-              sale.id
-            ) || 0
-          : Number(
-              sale.amount_paid || 0
-            );
-
-      account.totalSales +=
-        total;
+        Number(sale.total_amount || 0);
 
       /*
-       * Only count payment records
-       * here once. Payments are
-       * accumulated below from the
-       * payment ledger.
+       * If payment ledger records exist for this sale,
+       * use the ledger as the authoritative payment total.
+       *
+       * Otherwise fall back to sales.amount_paid for
+       * historical records.
        */
-      if (
-        paymentBySale.has(
-          sale.id
-        )
-      ) {
-        account.totalPayments +=
-          ledgerPayment;
-      } else {
-        account.totalPayments +=
-          Number(
-            sale.amount_paid || 0
-          );
-      }
+      const ledgerPayment =
+        paymentBySale.has(sale.id)
+          ? paymentBySale.get(sale.id) || 0
+          : Number(sale.amount_paid || 0);
+
+      account.totalSales += total;
+
+      account.totalPayments += ledgerPayment;
 
       const balance = Math.max(
         0,
         total - ledgerPayment
       );
 
-      account.outstanding +=
-        balance;
+      account.outstanding += balance;
 
       if (balance > 0) {
-        account.outstandingSales +=
-          1;
+        account.outstandingSales += 1;
+      }
+
+      if (
+        !account.lastSaleDate ||
+        new Date(sale.created_at).getTime() >
+          new Date(account.lastSaleDate).getTime()
+      ) {
+        account.lastSaleDate =
+          sale.created_at;
       }
     });
 
-    return Array.from(
-      map.values()
-    ).sort((a, b) => {
+    /*
+     * Latest payment date for each customer.
+     */
+    payments.forEach((payment) => {
+      const sale = sales.find(
+        (item) => item.id === payment.sale_id
+      );
+
+      if (!sale) return;
+
+      const name =
+        sale.customer_name?.trim() || "N/A";
+
+      const account =
+        map.get(name.toLowerCase());
+
+      if (!account) return;
+
       if (
-        b.outstanding !==
-        a.outstanding
+        !account.lastPaymentDate ||
+        new Date(payment.created_at).getTime() >
+          new Date(
+            account.lastPaymentDate
+          ).getTime()
       ) {
-        return (
-          b.outstanding -
+        account.lastPaymentDate =
+          payment.created_at;
+      }
+    });
+
+    return Array.from(map.values()).sort(
+      (a, b) => {
+        if (
+          b.outstanding !==
           a.outstanding
+        ) {
+          return (
+            b.outstanding -
+            a.outstanding
+          );
+        }
+
+        return a.name.localeCompare(
+          b.name
         );
       }
-
-      return a.name.localeCompare(
-        b.name
-      );
-    });
+    );
   }, [
     customers,
     sales,
+    payments,
     paymentBySale,
   ]);
 
-  const filteredAccounts =
-    useMemo(() => {
-      const query =
-        search.trim().toLowerCase();
+  /*
+   * ------------------------------------------------------------
+   * SEARCH
+   * ------------------------------------------------------------
+   */
 
-      if (!query) {
-        return accounts;
-      }
+  const filteredAccounts = useMemo(() => {
+    const query =
+      search.trim().toLowerCase();
 
-      return accounts.filter(
-        (account) =>
-          account.name
-            .toLowerCase()
-            .includes(query) ||
-          account.phone
-            ?.toLowerCase()
-            .includes(query)
-      );
-    }, [accounts, search]);
+    if (!query) {
+      return accounts;
+    }
 
-  const totalSales =
-    accounts.reduce(
-      (sum, account) =>
-        sum + account.totalSales,
-      0
+    return accounts.filter(
+      (account) =>
+        account.name
+          .toLowerCase()
+          .includes(query) ||
+        account.phone
+          ?.toLowerCase()
+          .includes(query)
     );
+  }, [accounts, search]);
 
-  const totalPayments =
-    accounts.reduce(
-      (sum, account) =>
-        sum + account.totalPayments,
-      0
-    );
+  /*
+   * ------------------------------------------------------------
+   * SUMMARY
+   * ------------------------------------------------------------
+   */
+
+  const totalSales = accounts.reduce(
+    (sum, account) =>
+      sum + account.totalSales,
+    0
+  );
+
+  const totalPayments = accounts.reduce(
+    (sum, account) =>
+      sum + account.totalPayments,
+    0
+  );
 
   const totalOutstanding =
     accounts.reduce(
@@ -389,13 +418,17 @@ export default function CustomerAccountsPage() {
       0
     );
 
+  /*
+   * ------------------------------------------------------------
+   * RENDER
+   * ------------------------------------------------------------
+   */
+
   return (
     <main className="space-y-6 p-6">
-
       {/* HEADER */}
 
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-
         <div>
           <h1 className="text-3xl font-bold">
             Customer Accounts
@@ -403,35 +436,38 @@ export default function CustomerAccountsPage() {
 
           <p className="mt-1 text-gray-600">
             Customer sales, payments,
-            and outstanding balances.
+            balances and account activity.
           </p>
         </div>
 
-        <div className="flex gap-2">
-
+        <div className="flex flex-wrap gap-2">
           <Link
             href="/customers/statements"
-            className="rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+            className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
           >
             Customer Statements
           </Link>
 
           <Link
             href="/receivables"
-            className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+            className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
           >
             Receivables
           </Link>
 
+          <Link
+            href="/receivables/aging"
+            className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+          >
+            Aging Report
+          </Link>
         </div>
-
       </div>
 
       {/* ERROR */}
 
       {errorMessage && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-
           <p className="font-semibold">
             Unable to load customer accounts
           </p>
@@ -439,16 +475,13 @@ export default function CustomerAccountsPage() {
           <p className="mt-1 text-sm">
             {errorMessage}
           </p>
-
         </div>
       )}
 
       {/* SUMMARY */}
 
-      <div className="grid gap-4 md:grid-cols-4">
-
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border bg-white p-5 shadow-sm">
-
           <p className="text-sm text-gray-500">
             Total Sales
           </p>
@@ -456,11 +489,9 @@ export default function CustomerAccountsPage() {
           <p className="mt-2 text-2xl font-bold">
             {money(totalSales)}
           </p>
-
         </div>
 
         <div className="rounded-lg border bg-white p-5 shadow-sm">
-
           <p className="text-sm text-gray-500">
             Total Payments
           </p>
@@ -468,11 +499,9 @@ export default function CustomerAccountsPage() {
           <p className="mt-2 text-2xl font-bold text-green-600">
             {money(totalPayments)}
           </p>
-
         </div>
 
         <div className="rounded-lg border bg-white p-5 shadow-sm">
-
           <p className="text-sm text-gray-500">
             Outstanding
           </p>
@@ -480,11 +509,9 @@ export default function CustomerAccountsPage() {
           <p className="mt-2 text-2xl font-bold text-red-600">
             {money(totalOutstanding)}
           </p>
-
         </div>
 
         <div className="rounded-lg border bg-white p-5 shadow-sm">
-
           <p className="text-sm text-gray-500">
             Customers Owing
           </p>
@@ -494,18 +521,14 @@ export default function CustomerAccountsPage() {
           </p>
 
           <p className="mt-1 text-xs text-gray-500">
-            {outstandingSales} outstanding
-            sales
+            {outstandingSales} outstanding sales
           </p>
-
         </div>
-
       </div>
 
       {/* SEARCH */}
 
       <div className="rounded-lg border bg-white p-5 shadow-sm">
-
         <label
           htmlFor="customer-search"
           className="mb-2 block text-sm font-semibold"
@@ -518,34 +541,24 @@ export default function CustomerAccountsPage() {
           type="text"
           value={search}
           onChange={(event) =>
-            setSearch(
-              event.target.value
-            )
+            setSearch(event.target.value)
           }
           placeholder="Search by customer name or phone..."
           className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2"
         />
-
       </div>
 
       {/* TABLE */}
 
       {loading ? (
-
         <div className="rounded-lg border bg-white p-10 text-center">
           Loading customer accounts...
         </div>
-
       ) : (
-
         <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
-
           <table className="min-w-full">
-
             <thead className="bg-gray-50">
-
               <tr>
-
                 <th className="border-b p-3 text-left text-sm font-semibold">
                   Customer
                 </th>
@@ -574,47 +587,49 @@ export default function CustomerAccountsPage() {
                   Owing Sales
                 </th>
 
+                <th className="border-b p-3 text-left text-sm font-semibold">
+                  Last Activity
+                </th>
+
                 <th className="border-b p-3 text-center text-sm font-semibold">
                   Action
                 </th>
-
               </tr>
-
             </thead>
 
             <tbody>
-
               {filteredAccounts.length ===
               0 ? (
-
                 <tr>
-
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="p-10 text-center text-gray-500"
                   >
                     No customer accounts
                     found.
                   </td>
-
                 </tr>
-
               ) : (
-
                 filteredAccounts.map(
                   (account) => (
                     <tr
                       key={account.id}
                       className="border-b last:border-b-0 hover:bg-gray-50"
                     >
+                      <td className="p-3">
+                        <div className="font-semibold">
+                          {account.name}
+                        </div>
 
-                      <td className="p-3 font-semibold">
-                        {account.name}
+                        {account.address && (
+                          <div className="mt-1 max-w-[220px] truncate text-xs text-gray-500">
+                            {account.address}
+                          </div>
+                        )}
                       </td>
 
                       <td className="p-3">
-                        {account.phone ||
-                          "—"}
+                        {account.phone || "—"}
                       </td>
 
                       <td className="p-3">
@@ -651,49 +666,63 @@ export default function CustomerAccountsPage() {
                         {account.outstandingSales}
                       </td>
 
-                      <td className="p-3 text-center">
-
-                        {account.outstanding >
-                        0 ? (
-
-                          <Link
-                            href={`/receivables?customer=${encodeURIComponent(
-                              account.name
-                            )}`}
-                            className="text-sm font-semibold text-blue-600 hover:underline"
-                          >
-                            View Account
-                          </Link>
-
-                        ) : (
-
-                          <Link
-                            href={`/customers/statements?customer=${encodeURIComponent(
-                              account.name
-                            )}`}
-                            className="text-sm font-semibold text-blue-600 hover:underline"
-                          >
-                            Statement
-                          </Link>
-
-                        )}
-
+                      <td className="whitespace-nowrap p-3 text-sm text-gray-600">
+                        {account.lastPaymentDate
+                          ? `Payment: ${formatDate(
+                              account.lastPaymentDate
+                            )}`
+                          : account.lastSaleDate
+                          ? `Sale: ${formatDate(
+                              account.lastSaleDate
+                            )}`
+                          : "—"}
                       </td>
 
+                      <td className="p-3">
+                        <div className="flex flex-wrap justify-center gap-2">
+                          {account.outstanding >
+                          0 ? (
+                            <>
+                              <Link
+                                href={`/receivables?customer=${encodeURIComponent(
+                                  account.name
+                                )}`}
+                                className="rounded-md border px-3 py-1.5 text-xs font-semibold hover:bg-gray-50"
+                              >
+                                Receivables
+                              </Link>
+
+                              <Link
+                                href={`/customers/statements?customer=${encodeURIComponent(
+                                  account.name
+                                )}`}
+                                className="rounded-md border px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+                              >
+                                Statement
+                              </Link>
+                            </>
+                          ) : (
+                            <Link
+                              href={`/customers/statements?customer=${encodeURIComponent(
+                                account.name
+                              )}`}
+                              className="rounded-md border px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+                            >
+                              Statement
+                            </Link>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   )
                 )
-
               )}
-
             </tbody>
 
             {filteredAccounts.length >
               0 && (
               <tfoot className="bg-gray-50">
-
                 <tr>
-
                   <td
                     colSpan={3}
                     className="p-3 text-right font-bold"
@@ -757,17 +786,13 @@ export default function CustomerAccountsPage() {
 
                   <td />
 
+                  <td />
                 </tr>
-
               </tfoot>
             )}
-
           </table>
-
         </div>
-
       )}
-
     </main>
   );
 }
