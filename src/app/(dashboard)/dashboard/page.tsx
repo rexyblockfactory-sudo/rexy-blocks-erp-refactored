@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+
 import { supabase } from "@/lib/supabase/client";
 
 import DashboardStats from "@/components/dashboard/DashboardStats";
@@ -18,9 +19,15 @@ import type {
 interface Sale {
   id: string;
   customer_name: string | null;
+  product_name?: string | null;
+  quantity?: number | null;
   total_amount: number;
   amount_paid: number;
   balance_due: number;
+  cost_per_unit?: number | null;
+  cogs?: number | null;
+  gross_profit?: number | null;
+  gross_margin?: number | null;
   created_at: string;
 }
 
@@ -45,25 +52,54 @@ interface ExpenseCategory {
   amount: number;
 }
 
-function money(value: number) {
-  return `GH₵${Number(value || 0).toLocaleString(
-    "en-GH",
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }
-  )}`;
+interface InventoryItem {
+  id: string;
+  item_name: string;
+  category: string;
+  unit: string;
+  quantity: number | null;
+  unit_cost: number | null;
+  created_at: string;
+}
+
+interface StockAlert {
+  id?: string;
+  item_name: string;
+  minimum_quantity: number;
+}
+
+function money(value: number): string {
+  const number = Number(value || 0);
+
+  return `GH₵${number.toLocaleString("en-GH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function number(value: number, decimals = 0): string {
+  const amount = Number(value || 0);
+
+  return amount.toLocaleString("en-GH", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+function percent(value: number): string {
+  const amount = Number(value || 0);
+
+  return `${amount.toFixed(2)}%`;
 }
 
 export default function DashboardPage() {
   /*
-   * -----------------------------------
-   * EXISTING DASHBOARD STATE
-   * -----------------------------------
+   * ==========================================
+   * OPERATIONAL DASHBOARD STATE
+   * ==========================================
    */
 
-  const [salesTotal, setSalesTotal] =
-    useState(0);
+  const [salesTotal, setSalesTotal] = useState(0);
 
   const [productionTotal, setProductionTotal] =
     useState(0);
@@ -90,9 +126,9 @@ export default function DashboardPage() {
   ] = useState<DashboardProductionRecord[]>([]);
 
   /*
-   * -----------------------------------
+   * ==========================================
    * RECEIVABLES
-   * -----------------------------------
+   * ==========================================
    */
 
   const [
@@ -131,10 +167,25 @@ export default function DashboardPage() {
   ] = useState(0);
 
   /*
-   * -----------------------------------
-   * FINANCIAL SUMMARY
-   * -----------------------------------
+   * ==========================================
+   * FINANCIAL STATE
+   * ==========================================
    */
+
+  const [
+    totalCogs,
+    setTotalCogs,
+  ] = useState(0);
+
+  const [
+    grossProfit,
+    setGrossProfit,
+  ] = useState(0);
+
+  const [
+    grossMargin,
+    setGrossMargin,
+  ] = useState(0);
 
   const [
     totalExpenses,
@@ -162,22 +213,62 @@ export default function DashboardPage() {
   ] = useState<ExpenseCategory[]>([]);
 
   /*
-   * -----------------------------------
+   * ==========================================
+   * INVENTORY VALUE
+   * ==========================================
+   */
+
+  const [
+    rawMaterialValue,
+    setRawMaterialValue,
+  ] = useState(0);
+
+  const [
+    finishedGoodsValue,
+    setFinishedGoodsValue,
+  ] = useState(0);
+
+  const [
+    rawMaterialItems,
+    setRawMaterialItems,
+  ] = useState(0);
+
+  const [
+    finishedGoodsItems,
+    setFinishedGoodsItems,
+  ] = useState(0);
+
+  const [
+    uncostedFinishedGoods,
+    setUncostedFinishedGoods,
+  ] = useState(0);
+
+  /*
+   * ==========================================
+   * LOADING
+   * ==========================================
+   */
+
+  const [loading, setLoading] =
+    useState(true);
+
+  /*
+   * ==========================================
    * LOAD DASHBOARD
-   * -----------------------------------
+   * ==========================================
    */
 
   useEffect(() => {
+    let mounted = true;
+
     async function loadDashboard() {
       try {
+        setLoading(true);
+
         /*
-         * -----------------------------------
+         * --------------------------------------
          * RECENT SALES
-         * -----------------------------------
-         *
-         * This query intentionally remains
-         * limited to 5 records because it is
-         * used only by the Recent Sales widget.
+         * --------------------------------------
          */
 
         const {
@@ -192,9 +283,9 @@ export default function DashboardPage() {
           .limit(5);
 
         /*
-         * -----------------------------------
+         * --------------------------------------
          * RECENT PRODUCTION
-         * -----------------------------------
+         * --------------------------------------
          */
 
         const {
@@ -209,9 +300,9 @@ export default function DashboardPage() {
           .limit(5);
 
         /*
-         * -----------------------------------
+         * --------------------------------------
          * INVENTORY
-         * -----------------------------------
+         * --------------------------------------
          */
 
         const {
@@ -222,9 +313,9 @@ export default function DashboardPage() {
           .select("*");
 
         /*
-         * -----------------------------------
+         * --------------------------------------
          * STOCK ALERTS
-         * -----------------------------------
+         * --------------------------------------
          */
 
         const {
@@ -235,17 +326,16 @@ export default function DashboardPage() {
           .select("*");
 
         /*
-         * -----------------------------------
+         * --------------------------------------
          * ALL SALES
-         * -----------------------------------
+         * --------------------------------------
          *
-         * This query is NOT limited.
-         *
-         * It is used for:
-         * - Total Sales
-         * - Receivables
-         * - Customer balances
-         * - Aging
+         * Required for:
+         * Revenue
+         * COGS
+         * Gross Profit
+         * Receivables
+         * Collections
          */
 
         const {
@@ -253,21 +343,25 @@ export default function DashboardPage() {
           error: allSalesError,
         } = await supabase
           .from("sales")
-          .select(
-            `
-              id,
-              customer_name,
-              total_amount,
-              amount_paid,
-              balance_due,
-              created_at
-            `
-          );
+          .select(`
+            id,
+            customer_name,
+            product_name,
+            quantity,
+            total_amount,
+            amount_paid,
+            balance_due,
+            cost_per_unit,
+            cogs,
+            gross_profit,
+            gross_margin,
+            created_at
+          `);
 
         /*
-         * -----------------------------------
+         * --------------------------------------
          * ALL EXPENSES
-         * -----------------------------------
+         * --------------------------------------
          */
 
         const {
@@ -275,24 +369,22 @@ export default function DashboardPage() {
           error: expensesError,
         } = await supabase
           .from("expenses")
-          .select(
-            `
-              id,
-              expense_name,
-              category,
-              amount,
-              notes,
-              created_at
-            `
-          )
+          .select(`
+            id,
+            expense_name,
+            category,
+            amount,
+            notes,
+            created_at
+          `)
           .order("created_at", {
             ascending: false,
           });
 
         /*
-         * -----------------------------------
+         * --------------------------------------
          * ERROR LOGGING
-         * -----------------------------------
+         * --------------------------------------
          */
 
         if (salesError) {
@@ -338,24 +430,27 @@ export default function DashboardPage() {
         }
 
         /*
-         * -----------------------------------
-         * NORMALIZE ALL SALES
-         * -----------------------------------
+         * --------------------------------------
+         * NORMALIZE
+         * --------------------------------------
          */
 
         const saleRows =
           (allSales || []) as Sale[];
 
+        const inventoryRows =
+          (inventory || []) as InventoryItem[];
+
+        const alertRows =
+          (alerts || []) as StockAlert[];
+
+        const expenseRows =
+          (expenses || []) as Expense[];
+
         /*
-         * -----------------------------------
-         * TOTAL SALES
-         * -----------------------------------
-         *
-         * IMPORTANT:
-         *
-         * Do NOT calculate this from the
-         * "sales" variable because that query
-         * contains only the latest 5 records.
+         * --------------------------------------
+         * TOTAL REVENUE
+         * --------------------------------------
          */
 
         const totalSales =
@@ -369,99 +464,114 @@ export default function DashboardPage() {
           );
 
         /*
-         * -----------------------------------
-         * TOTAL PRODUCTION
-         * -----------------------------------
+         * --------------------------------------
+         * COGS
+         * --------------------------------------
          *
-         * This remains the latest 5 production
-         * records because the existing
-         * DashboardStats uses it as an
-         * operational summary.
+         * Use the COGS recorded on each sale.
+         *
+         * If COGS is zero, it remains zero.
+         * This prevents the dashboard from
+         * inventing a production cost.
+         */
+
+        const calculatedCogs =
+          saleRows.reduce(
+            (sum, sale) =>
+              sum +
+              Math.max(
+                0,
+                Number(
+                  sale.cogs || 0
+                )
+              ),
+            0
+          );
+
+        /*
+         * --------------------------------------
+         * GROSS PROFIT
+         * --------------------------------------
+         */
+
+        const calculatedGrossProfit =
+          totalSales -
+          calculatedCogs;
+
+        /*
+         * --------------------------------------
+         * GROSS MARGIN
+         * --------------------------------------
+         */
+
+        const calculatedGrossMargin =
+          totalSales > 0
+            ? (calculatedGrossProfit /
+                totalSales) *
+              100
+            : 0;
+
+        /*
+         * --------------------------------------
+         * RECENT PRODUCTION TOTAL
+         * --------------------------------------
          */
 
         const totalProduction =
-          production?.reduce(
-            (sum, item) =>
+          (production || []).reduce(
+            (
+              sum,
+              item
+            ) =>
               sum +
               Number(
                 item.quantity || 0
               ),
             0
-          ) ?? 0;
+          );
 
         /*
-         * -----------------------------------
+         * --------------------------------------
          * LOW STOCK
-         * -----------------------------------
+         * --------------------------------------
          */
 
-        const alertItems: DashboardLowStockItem[] =
-          [];
+        const alertItems:
+          DashboardLowStockItem[] = [];
 
-        alerts?.forEach((alert) => {
-          const item =
-            inventory?.find(
-              (inventoryItem) =>
-                inventoryItem.item_name ===
-                alert.item_name
-            );
+        alertRows.forEach(
+          (alert) => {
+            const item =
+              inventoryRows.find(
+                (inventoryItem) =>
+                  inventoryItem.item_name ===
+                  alert.item_name
+              );
 
-          if (
-            item &&
-            Number(item.quantity) <
+            if (
+              item &&
               Number(
-                alert.minimum_quantity
-              )
-          ) {
-            alertItems.push({
-              name: item.item_name,
-              quantity: Number(
-                item.quantity
-              ),
-            });
+                item.quantity || 0
+              ) <
+                Number(
+                  alert.minimum_quantity ||
+                    0
+                )
+            ) {
+              alertItems.push({
+                name: item.item_name,
+                quantity: Number(
+                  item.quantity || 0
+                ),
+              });
+            }
           }
-        });
-
-        /*
-         * -----------------------------------
-         * EXISTING DASHBOARD STATE
-         * -----------------------------------
-         */
-
-        setSalesTotal(
-          totalSales
-        );
-
-        setProductionTotal(
-          totalProduction
-        );
-
-        setProductCount(
-          inventory?.length ?? 0
-        );
-
-        setLowStockCount(
-          alertItems.length
-        );
-
-        setLowStockItems(
-          alertItems
-        );
-
-        setRecentSales(
-          (sales ??
-            []) as DashboardRecentSale[]
-        );
-
-        setRecentProduction(
-          (production ??
-            []) as DashboardProductionRecord[]
         );
 
         /*
-         * -----------------------------------
-         * RECEIVABLES
-         * -----------------------------------
+         * --------------------------------------
+         * RECEIVABLE PAYMENT LEDGER
+         * --------------------------------------
          */
 
         const saleIds =
@@ -469,29 +579,23 @@ export default function DashboardPage() {
             (sale) => sale.id
           );
 
-        let paymentRows: Payment[] =
-          [];
+        let paymentRows:
+          Payment[] = [];
 
-        /*
-         * -----------------------------------
-         * PAYMENT LEDGER
-         * -----------------------------------
-         */
-
-        if (saleIds.length > 0) {
+        if (
+          saleIds.length > 0
+        ) {
           const {
             data: payments,
             error: paymentsError,
           } = await supabase
             .from("sale_payments")
-            .select(
-              `
-                id,
-                sale_id,
-                amount,
-                created_at
-              `
-            )
+            .select(`
+              id,
+              sale_id,
+              amount,
+              created_at
+            `)
             .in(
               "sale_id",
               saleIds
@@ -510,9 +614,9 @@ export default function DashboardPage() {
         }
 
         /*
-         * -----------------------------------
+         * --------------------------------------
          * PAYMENTS BY SALE
-         * -----------------------------------
+         * --------------------------------------
          */
 
         const paymentsBySale =
@@ -539,21 +643,16 @@ export default function DashboardPage() {
         );
 
         /*
-         * -----------------------------------
+         * --------------------------------------
          * RECEIVABLE CALCULATIONS
-         * -----------------------------------
+         * --------------------------------------
          */
 
         let collected = 0;
-
         let outstanding = 0;
-
         let current = 0;
-
         let thirtyOneToSixty = 0;
-
         let sixtyOneToNinety = 0;
-
         let ninetyPlus = 0;
 
         const owingCustomers =
@@ -568,12 +667,6 @@ export default function DashboardPage() {
               Number(
                 sale.total_amount || 0
               );
-
-            /*
-             * Use the payment ledger
-             * whenever payment records
-             * exist.
-             */
 
             const paid =
               paymentsBySale.has(
@@ -593,30 +686,16 @@ export default function DashboardPage() {
                 total - paid
               );
 
-            /*
-             * Total actual collections.
-             */
-
             collected += paid;
 
-            /*
-             * Fully paid sale.
-             */
-
-            if (balance <= 0) {
+            if (
+              balance <= 0
+            ) {
               return;
             }
 
-            /*
-             * Outstanding balance.
-             */
-
             outstanding +=
               balance;
-
-            /*
-             * Customer count.
-             */
 
             const customer =
               sale.customer_name?.trim();
@@ -626,10 +705,6 @@ export default function DashboardPage() {
                 customer
               );
             }
-
-            /*
-             * Aging.
-             */
 
             const saleDate =
               new Date(
@@ -652,7 +727,9 @@ export default function DashboardPage() {
                 )
               );
 
-            if (days <= 30) {
+            if (
+              days <= 30
+            ) {
               current +=
                 balance;
             } else if (
@@ -673,51 +750,9 @@ export default function DashboardPage() {
         );
 
         /*
-         * -----------------------------------
-         * SET RECEIVABLE STATE
-         * -----------------------------------
-         */
-
-        setTotalCollected(
-          collected
-        );
-
-        setOutstandingReceivables(
-          outstanding
-        );
-
-        setCustomersOwing(
-          owingCustomers.size
-        );
-
-        setCurrentReceivables(
-          current
-        );
-
-        setDays31to60(
-          thirtyOneToSixty
-        );
-
-        setDays61to90(
-          sixtyOneToNinety
-        );
-
-        setDays90Plus(
-          ninetyPlus
-        );
-
-        /*
-         * -----------------------------------
+         * --------------------------------------
          * EXPENSES
-         * -----------------------------------
-         */
-
-        const expenseRows =
-          (expenses ||
-            []) as Expense[];
-
-        /*
-         * Total expenses.
+         * --------------------------------------
          */
 
         const expenseTotal =
@@ -731,7 +766,9 @@ export default function DashboardPage() {
           );
 
         /*
-         * Expense categories.
+         * --------------------------------------
+         * EXPENSE CATEGORIES
+         * --------------------------------------
          */
 
         const categories =
@@ -778,30 +815,200 @@ export default function DashboardPage() {
             );
 
         /*
-         * -----------------------------------
-         * FINANCIAL CALCULATIONS
-         * -----------------------------------
+         * --------------------------------------
+         * NET CASH FLOW
+         * --------------------------------------
          *
-         * Net Cash Flow:
+         * Cash accounting:
          *
-         * Actual money collected
-         * minus
-         * recorded expenses.
-         *
-         * Net Profit:
-         *
-         * Total sales
-         * minus
-         * recorded expenses.
+         * Collections - Expenses
          */
 
         const calculatedNetCashFlow =
           collected -
           expenseTotal;
 
+        /*
+         * --------------------------------------
+         * NET PROFIT
+         * --------------------------------------
+         *
+         * Accrual-style operating result:
+         *
+         * Revenue
+         * - COGS
+         * - Expenses
+         */
+
         const calculatedNetProfit =
-          totalSales -
+          calculatedGrossProfit -
           expenseTotal;
+
+        /*
+         * --------------------------------------
+         * INVENTORY VALUES
+         * --------------------------------------
+         */
+
+        let rawValue = 0;
+        let finishedValue = 0;
+        let rawCount = 0;
+        let finishedCount = 0;
+
+        inventoryRows.forEach(
+          (item) => {
+            const quantity =
+              Number(
+                item.quantity || 0
+              );
+
+            const unitCost =
+              Number(
+                item.unit_cost || 0
+              );
+
+            const value =
+              quantity *
+              unitCost;
+
+            const category =
+              item.category
+                ?.trim()
+                .toLowerCase();
+
+            const isFinishedGoods =
+              category ===
+                "finished goods" ||
+              category ===
+                "finished good" ||
+              item.item_name
+                ?.toLowerCase()
+                .includes("block");
+
+            if (
+              isFinishedGoods
+            ) {
+              finishedValue +=
+                value;
+              finishedCount +=
+                1;
+            } else {
+              rawValue +=
+                value;
+              rawCount +=
+                1;
+            }
+          }
+        );
+
+        /*
+         * --------------------------------------
+         * FINISHED GOODS COST ALERT
+         * --------------------------------------
+         *
+         * Inventory rows for block products
+         * with zero cost are considered
+         * uncosted.
+         */
+
+        const blockInventory =
+          inventoryRows.filter(
+            (item) =>
+              item.item_name
+                ?.toLowerCase()
+                .includes("block")
+          );
+
+        const uncosted =
+          blockInventory.filter(
+            (item) =>
+              Number(
+                item.quantity || 0
+              ) > 0 &&
+              Number(
+                item.unit_cost || 0
+              ) <= 0
+          ).length;
+
+        /*
+         * --------------------------------------
+         * UPDATE STATE
+         * --------------------------------------
+         */
+
+        if (!mounted) {
+          return;
+        }
+
+        setSalesTotal(
+          totalSales
+        );
+
+        setProductionTotal(
+          totalProduction
+        );
+
+        setProductCount(
+          inventoryRows.length
+        );
+
+        setLowStockCount(
+          alertItems.length
+        );
+
+        setLowStockItems(
+          alertItems
+        );
+
+        setRecentSales(
+          (sales ||
+            []) as DashboardRecentSale[]
+        );
+
+        setRecentProduction(
+          (production ||
+            []) as DashboardProductionRecord[]
+        );
+
+        setTotalCollected(
+          collected
+        );
+
+        setOutstandingReceivables(
+          outstanding
+        );
+
+        setCustomersOwing(
+          owingCustomers.size
+        );
+
+        setCurrentReceivables(
+          current
+        );
+
+        setDays31to60(
+          thirtyOneToSixty
+        );
+
+        setDays61to90(
+          sixtyOneToNinety
+        );
+
+        setDays90Plus(
+          ninetyPlus
+        );
+
+        setTotalCogs(
+          calculatedCogs
+        );
+
+        setGrossProfit(
+          calculatedGrossProfit
+        );
+
+        setGrossMargin(
+          calculatedGrossMargin
+        );
 
         setTotalExpenses(
           expenseTotal
@@ -822,23 +1029,57 @@ export default function DashboardPage() {
         setExpenseCategories(
           categorySummary
         );
+
+        setRawMaterialValue(
+          rawValue
+        );
+
+        setFinishedGoodsValue(
+          finishedValue
+        );
+
+        setRawMaterialItems(
+          rawCount
+        );
+
+        setFinishedGoodsItems(
+          finishedCount
+        );
+
+        setUncostedFinishedGoods(
+          uncosted
+        );
       } catch (error) {
         console.error(
           "Dashboard error:",
           error
         );
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
     }
 
     loadDashboard();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
+
+  /*
+   * ==========================================
+   * RENDER
+   * ==========================================
+   */
 
   return (
     <main className="space-y-8 p-6">
 
-      {/* ===================================
+      {/* =====================================
           HEADER
-          =================================== */}
+          ===================================== */}
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 
@@ -848,24 +1089,35 @@ export default function DashboardPage() {
           </h1>
 
           <p className="mt-1 text-gray-600">
-            Overview of sales, production,
-            inventory, receivables, expenses,
-            and cash flow.
+            Management overview of sales,
+            production, inventory, receivables,
+            expenses, and profitability.
           </p>
         </div>
 
-        <Link
-          href="/receivables/aging"
-          className="w-fit rounded-lg bg-black px-4 py-2 text-white hover:bg-gray-800"
-        >
-          Receivables Aging
-        </Link>
+        <div className="flex flex-wrap gap-2">
+
+          <Link
+            href="/financials/profit-loss"
+            className="w-fit rounded-lg border bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+          >
+            Profit & Loss
+          </Link>
+
+          <Link
+            href="/receivables/aging"
+            className="w-fit rounded-lg bg-black px-4 py-2 text-white hover:bg-gray-800"
+          >
+            Receivables Aging
+          </Link>
+
+        </div>
 
       </div>
 
-      {/* ===================================
-          EXISTING OPERATIONAL STATS
-          =================================== */}
+      {/* =====================================
+          OPERATIONAL STATS
+          ===================================== */}
 
       <DashboardStats
         salesTotal={
@@ -882,9 +1134,9 @@ export default function DashboardPage() {
         }
       />
 
-      {/* ===================================
-          FINANCIAL OVERVIEW
-          =================================== */}
+      {/* =====================================
+          MANAGEMENT FINANCIAL CENTER
+          ===================================== */}
 
       <section className="space-y-4">
 
@@ -892,32 +1144,33 @@ export default function DashboardPage() {
 
           <div>
             <h2 className="text-2xl font-bold">
-              Financial Overview
+              Financial Management Center
             </h2>
 
             <p className="text-sm text-gray-500">
-              Sales, collections, expenses,
-              profit, and cash flow.
+              Revenue, cost of sales,
+              profitability, cash collection,
+              and operating expenses.
             </p>
           </div>
 
           <Link
-            href="/expenses"
+            href="/financials/profit-loss"
             className="text-sm font-semibold text-blue-600 hover:underline"
           >
-            View Expenses →
+            View Full Profit & Loss →
           </Link>
 
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
-          {/* TOTAL SALES */}
+          {/* REVENUE */}
 
           <div className="rounded-lg border bg-white p-5 shadow-sm">
 
             <p className="text-sm text-gray-500">
-              Total Sales
+              Revenue
             </p>
 
             <p className="mt-2 text-2xl font-bold">
@@ -927,93 +1180,56 @@ export default function DashboardPage() {
             </p>
 
             <p className="mt-1 text-xs text-gray-500">
-              Total invoiced sales
+              Total recorded sales
             </p>
 
           </div>
 
-          {/* TOTAL COLLECTED */}
+          {/* COGS */}
 
           <div className="rounded-lg border bg-white p-5 shadow-sm">
 
             <p className="text-sm text-gray-500">
-              Total Collected
+              Cost of Goods Sold
             </p>
 
-            <p className="mt-2 text-2xl font-bold text-green-600">
+            <p className="mt-2 text-2xl font-bold text-orange-600">
               {money(
-                totalCollected
+                totalCogs
               )}
             </p>
 
             <p className="mt-1 text-xs text-gray-500">
-              Actual customer payments
+              Recorded production cost of sold blocks
             </p>
 
           </div>
 
-          {/* OUTSTANDING */}
+          {/* GROSS PROFIT */}
 
           <div className="rounded-lg border bg-white p-5 shadow-sm">
 
             <p className="text-sm text-gray-500">
-              Outstanding Receivables
-            </p>
-
-            <p className="mt-2 text-2xl font-bold text-red-600">
-              {money(
-                outstandingReceivables
-              )}
-            </p>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Money customers still owe
-            </p>
-
-          </div>
-
-          {/* EXPENSES */}
-
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
-
-            <p className="text-sm text-gray-500">
-              Total Expenses
-            </p>
-
-            <p className="mt-2 text-2xl font-bold text-red-600">
-              {money(
-                totalExpenses
-              )}
-            </p>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Recorded business expenses
-            </p>
-
-          </div>
-
-          {/* NET CASH FLOW */}
-
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
-
-            <p className="text-sm text-gray-500">
-              Net Cash Flow
+              Gross Profit
             </p>
 
             <p
               className={`mt-2 text-2xl font-bold ${
-                netCashFlow >= 0
+                grossProfit >= 0
                   ? "text-green-600"
                   : "text-red-600"
               }`}
             >
               {money(
-                netCashFlow
+                grossProfit
               )}
             </p>
 
             <p className="mt-1 text-xs text-gray-500">
-              Collected minus expenses
+              Margin:{" "}
+              {percent(
+                grossMargin
+              )}
             </p>
 
           </div>
@@ -1039,26 +1255,118 @@ export default function DashboardPage() {
             </p>
 
             <p className="mt-1 text-xs text-gray-500">
-              Sales minus recorded expenses
+              Gross profit minus expenses
             </p>
 
           </div>
 
         </div>
 
-        {/* FINANCIAL POSITION */}
+        {/* SECOND FINANCIAL ROW */}
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+
+          {/* COLLECTED */}
+
+          <div className="rounded-lg border bg-white p-5 shadow-sm">
+
+            <p className="text-sm text-gray-500">
+              Cash Collected
+            </p>
+
+            <p className="mt-2 text-2xl font-bold text-green-600">
+              {money(
+                totalCollected
+              )}
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Actual customer payments
+            </p>
+
+          </div>
+
+          {/* RECEIVABLES */}
+
+          <div className="rounded-lg border bg-white p-5 shadow-sm">
+
+            <p className="text-sm text-gray-500">
+              Receivables
+            </p>
+
+            <p className="mt-2 text-2xl font-bold text-red-600">
+              {money(
+                outstandingReceivables
+              )}
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Money customers still owe
+            </p>
+
+          </div>
+
+          {/* EXPENSES */}
+
+          <div className="rounded-lg border bg-white p-5 shadow-sm">
+
+            <p className="text-sm text-gray-500">
+              Operating Expenses
+            </p>
+
+            <p className="mt-2 text-2xl font-bold text-red-600">
+              {money(
+                totalExpenses
+              )}
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Recorded business expenses
+            </p>
+
+          </div>
+
+          {/* CASH FLOW */}
+
+          <div className="rounded-lg border bg-white p-5 shadow-sm">
+
+            <p className="text-sm text-gray-500">
+              Net Cash Flow
+            </p>
+
+            <p
+              className={`mt-2 text-2xl font-bold ${
+                netCashFlow >= 0
+                  ? "text-green-600"
+                  : "text-red-600"
+              }`}
+            >
+              {money(
+                netCashFlow
+              )}
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Cash collected minus expenses
+            </p>
+
+          </div>
+
+        </div>
+
+        {/* PROFITABILITY EXPLANATION */}
 
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-5">
 
           <h3 className="font-semibold text-blue-900">
-            Financial Position
+            Profitability Summary
           </h3>
 
           <div className="mt-4 grid gap-4 md:grid-cols-4">
 
             <div>
               <p className="text-xs text-blue-700">
-                Sales
+                Revenue
               </p>
 
               <p className="mt-1 font-bold text-blue-950">
@@ -1070,36 +1378,36 @@ export default function DashboardPage() {
 
             <div>
               <p className="text-xs text-blue-700">
-                Collected
+                COGS
               </p>
 
               <p className="mt-1 font-bold text-blue-950">
                 {money(
-                  totalCollected
+                  totalCogs
                 )}
               </p>
             </div>
 
             <div>
               <p className="text-xs text-blue-700">
-                Receivables
+                Gross Profit
               </p>
 
               <p className="mt-1 font-bold text-blue-950">
                 {money(
-                  outstandingReceivables
+                  grossProfit
                 )}
               </p>
             </div>
 
             <div>
               <p className="text-xs text-blue-700">
-                Expenses
+                Net Profit
               </p>
 
               <p className="mt-1 font-bold text-blue-950">
                 {money(
-                  totalExpenses
+                  netProfit
                 )}
               </p>
             </div>
@@ -1110,32 +1418,213 @@ export default function DashboardPage() {
 
       </section>
 
-      {/* ===================================
+      {/* =====================================
+          INVENTORY CONTROL
+          ===================================== */}
+
+      <section className="space-y-4">
+
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+
+          <div>
+            <h2 className="text-2xl font-bold">
+              Inventory Control
+            </h2>
+
+            <p className="text-sm text-gray-500">
+              Raw materials, finished goods,
+              stock value, and costing alerts.
+            </p>
+          </div>
+
+          <Link
+            href="/inventory"
+            className="text-sm font-semibold text-blue-600 hover:underline"
+          >
+            View Inventory →
+          </Link>
+
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+
+          {/* RAW MATERIAL VALUE */}
+
+          <div className="rounded-lg border bg-white p-5 shadow-sm">
+
+            <p className="text-sm text-gray-500">
+              Raw Material Value
+            </p>
+
+            <p className="mt-2 text-2xl font-bold">
+              {money(
+                rawMaterialValue
+              )}
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              {rawMaterialItems} inventory item
+              {rawMaterialItems === 1
+                ? ""
+                : "s"}
+            </p>
+
+          </div>
+
+          {/* FINISHED GOODS VALUE */}
+
+          <div className="rounded-lg border bg-white p-5 shadow-sm">
+
+            <p className="text-sm text-gray-500">
+              Finished Goods Value
+            </p>
+
+            <p className="mt-2 text-2xl font-bold">
+              {money(
+                finishedGoodsValue
+              )}
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              {finishedGoodsItems} finished-goods
+              item
+              {finishedGoodsItems === 1
+                ? ""
+                : "s"}
+            </p>
+
+          </div>
+
+          {/* LOW STOCK */}
+
+          <div className="rounded-lg border bg-white p-5 shadow-sm">
+
+            <p className="text-sm text-gray-500">
+              Low Stock Alerts
+            </p>
+
+            <p
+              className={`mt-2 text-2xl font-bold ${
+                lowStockCount > 0
+                  ? "text-red-600"
+                  : "text-green-600"
+              }`}
+            >
+              {number(
+                lowStockCount
+              )}
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Items below minimum quantity
+            </p>
+
+          </div>
+
+          {/* UNCOSTED */}
+
+          <div className="rounded-lg border bg-white p-5 shadow-sm">
+
+            <p className="text-sm text-gray-500">
+              Uncosted Finished Goods
+            </p>
+
+            <p
+              className={`mt-2 text-2xl font-bold ${
+                uncostedFinishedGoods > 0
+                  ? "text-red-600"
+                  : "text-green-600"
+              }`}
+            >
+              {number(
+                uncostedFinishedGoods
+              )}
+            </p>
+
+            <p className="mt-1 text-xs text-gray-500">
+              Block inventory without a unit cost
+            </p>
+
+          </div>
+
+        </div>
+
+        {/* COSTING WARNING */}
+
+        {uncostedFinishedGoods >
+          0 && (
+          <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-5">
+
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+
+              <div>
+
+                <p className="font-semibold text-yellow-900">
+                  Finished-goods costing requires attention
+                </p>
+
+                <p className="mt-1 text-sm text-yellow-800">
+                  Some block inventory has quantity
+                  but no production cost. This can
+                  cause COGS and profit reports to be
+                  incomplete.
+                </p>
+
+              </div>
+
+              <Link
+                href="/inventory"
+                className="w-fit rounded-lg bg-yellow-600 px-4 py-2 text-sm font-semibold text-white hover:bg-yellow-700"
+              >
+                Review Inventory
+              </Link>
+
+            </div>
+
+          </div>
+        )}
+
+      </section>
+
+      {/* =====================================
           EXPENSE BREAKDOWN
-          =================================== */}
+          ===================================== */}
 
       {expenseCategories.length >
         0 && (
         <section className="space-y-4">
 
-          <div>
-            <h2 className="text-2xl font-bold">
-              Expense Breakdown
-            </h2>
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
 
-            <p className="text-sm text-gray-500">
-              Where the factory's money is
-              being spent.
-            </p>
+            <div>
+
+              <h2 className="text-2xl font-bold">
+                Expense Breakdown
+              </h2>
+
+              <p className="text-sm text-gray-500">
+                Where the factory's money is being
+                spent.
+              </p>
+
+            </div>
+
+            <Link
+              href="/expenses"
+              className="text-sm font-semibold text-blue-600 hover:underline"
+            >
+              View Expenses →
+            </Link>
+
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 
             {expenseCategories.map(
               (item) => {
+
                 const percentage =
-                  totalExpenses >
-                  0
+                  totalExpenses > 0
                     ? (item.amount /
                         totalExpenses) *
                       100
@@ -1152,9 +1641,7 @@ export default function DashboardPage() {
                     <div className="flex items-center justify-between gap-4">
 
                       <p className="font-semibold">
-                        {
-                          item.category
-                        }
+                        {item.category}
                       </p>
 
                       <p className="whitespace-nowrap font-bold">
@@ -1194,40 +1681,43 @@ export default function DashboardPage() {
           </div>
 
           <p className="text-sm text-gray-500">
+
             {expenseCount} expense{" "}
-            {expenseCount ===
-            1
+            {expenseCount === 1
               ? "record"
               : "records"}{" "}
             totaling{" "}
+
             <span className="font-semibold text-gray-900">
               {money(
                 totalExpenses
               )}
             </span>
             .
+
           </p>
 
         </section>
       )}
 
-      {/* ===================================
+      {/* =====================================
           ACCOUNTS RECEIVABLE
-          =================================== */}
+          ===================================== */}
 
       <section className="space-y-4">
 
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
 
           <div>
+
             <h2 className="text-2xl font-bold">
               Accounts Receivable
             </h2>
 
             <p className="text-sm text-gray-500">
-              Money collected and customer
-              balances.
+              Money collected and customer balances.
             </p>
+
           </div>
 
           <Link
@@ -1239,11 +1729,9 @@ export default function DashboardPage() {
 
         </div>
 
-        {/* RECEIVABLE CARDS */}
-
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
-          {/* TOTAL COLLECTED */}
+          {/* COLLECTED */}
 
           <div className="rounded-lg border bg-white p-5 shadow-sm">
 
@@ -1284,7 +1772,9 @@ export default function DashboardPage() {
             </p>
 
             <p className="mt-2 text-2xl font-bold">
-              {customersOwing}
+              {number(
+                customersOwing
+              )}
             </p>
 
           </div>
@@ -1311,7 +1801,7 @@ export default function DashboardPage() {
 
         </div>
 
-        {/* AGING BREAKDOWN */}
+        {/* AGING */}
 
         <div className="grid gap-4 md:grid-cols-3">
 
@@ -1320,6 +1810,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
 
               <div>
+
                 <p className="text-sm font-semibold">
                   31–60 Days
                 </p>
@@ -1327,6 +1818,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-gray-500">
                   Moderate aging
                 </p>
+
               </div>
 
               <p className="text-lg font-bold">
@@ -1344,6 +1836,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
 
               <div>
+
                 <p className="text-sm font-semibold">
                   61–90 Days
                 </p>
@@ -1351,6 +1844,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-gray-500">
                   High aging
                 </p>
+
               </div>
 
               <p className="text-lg font-bold">
@@ -1368,6 +1862,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
 
               <div>
+
                 <p className="text-sm font-semibold">
                   90+ Days
                 </p>
@@ -1375,6 +1870,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-gray-500">
                   Severely overdue
                 </p>
+
               </div>
 
               <p className="text-lg font-bold text-red-600">
@@ -1400,11 +1896,11 @@ export default function DashboardPage() {
               <div>
 
                 <p className="font-semibold text-red-800">
-                  Customer balances require
-                  attention
+                  Customer balances require attention
                 </p>
 
                 <p className="text-sm text-red-700">
+
                   {customersOwing}{" "}
                   customer
                   {customersOwing ===
@@ -1412,10 +1908,12 @@ export default function DashboardPage() {
                     ? ""
                     : "s"}{" "}
                   currently owe{" "}
+
                   {money(
                     outstandingReceivables
                   )}
                   .
+
                 </p>
 
               </div>
@@ -1434,9 +1932,9 @@ export default function DashboardPage() {
 
       </section>
 
-      {/* ===================================
+      {/* =====================================
           LOW STOCK
-          =================================== */}
+          ===================================== */}
 
       <LowStock
         items={
@@ -1444,9 +1942,9 @@ export default function DashboardPage() {
         }
       />
 
-      {/* ===================================
+      {/* =====================================
           RECENT SALES
-          =================================== */}
+          ===================================== */}
 
       <RecentSales
         sales={
@@ -1454,9 +1952,9 @@ export default function DashboardPage() {
         }
       />
 
-      {/* ===================================
+      {/* =====================================
           PRODUCTION HISTORY
-          =================================== */}
+          ===================================== */}
 
       <ProductionHistory
         records={
