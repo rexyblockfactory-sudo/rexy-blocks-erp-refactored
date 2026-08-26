@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+
 import { supabase } from "@/lib/supabase/client";
+import { recordSalePayment } from "@/services/sales";
 
 interface Customer {
   id: string;
@@ -11,36 +13,74 @@ interface Customer {
   phone: string | null;
   address: string | null;
   customer_type: string | null;
-  balance: number | null;
+}
+
+interface Sale {
+  id: string;
+  customer_name: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  total_amount: number;
+  payment_method: string;
+  amount_paid: number;
+  balance_due: number;
+  created_at: string;
+}
+
+interface Payment {
+  id: string;
+  sale_id: string;
+  amount: number;
+  payment_method: string | null;
+  reference: string | null;
+  notes: string | null;
+  created_at: string;
 }
 
 function money(value: number) {
-  return `GH₵${value.toLocaleString("en-GH", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return `GH₵${Number(value || 0).toLocaleString(
+    "en-GH",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  )}`;
+}
+
+function formatDate(value: string | null) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleDateString("en-GH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default function CustomerPaymentPage() {
   const params = useParams();
   const router = useRouter();
 
-  const customerId = String(params.id);
+  const customerId =
+    typeof params?.id === "string"
+      ? params.id
+      : "";
 
   const [customer, setCustomer] =
     useState<Customer | null>(null);
 
-  const [currentBalance, setCurrentBalance] =
-    useState(0);
+  const [sales, setSales] =
+    useState<Sale[]>([]);
 
-  const [amount, setAmount] =
-    useState("");
-
-  const [paymentMethod, setPaymentMethod] =
-    useState("Cash");
-
-  const [notes, setNotes] =
-    useState("");
+  const [payments, setPayments] =
+    useState<Payment[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -48,18 +88,56 @@ export default function CustomerPaymentPage() {
   const [saving, setSaving] =
     useState(false);
 
-  const [error, setError] =
+  const [errorMessage, setErrorMessage] =
     useState("");
 
-  const [success, setSuccess] =
+  const [successMessage, setSuccessMessage] =
     useState("");
 
-  async function loadCustomer() {
+  const [selectedSaleId, setSelectedSaleId] =
+    useState("");
+
+  const [amount, setAmount] =
+    useState("");
+
+  const [paymentMethod, setPaymentMethod] =
+    useState("Cash");
+
+  const [reference, setReference] =
+    useState("");
+
+  const [notes, setNotes] =
+    useState("");
+
+  useEffect(() => {
+    if (!customerId) {
+      setErrorMessage(
+        "Customer ID is missing."
+      );
+
+      setLoading(false);
+      return;
+    }
+
+    loadCustomerAccount();
+  }, [customerId]);
+
+  async function loadCustomerAccount() {
     setLoading(true);
-    setError("");
+    setErrorMessage("");
+    setSuccessMessage("");
 
-    const customerResult =
-      await supabase
+    try {
+      /*
+       * --------------------------------------------------------
+       * CUSTOMER
+       * --------------------------------------------------------
+       */
+
+      const {
+        data: customerData,
+        error: customerError,
+      } = await supabase
         .from("customers")
         .select(
           `
@@ -67,86 +145,267 @@ export default function CustomerPaymentPage() {
             customer_name,
             phone,
             address,
-            customer_type,
-            balance
+            customer_type
           `
         )
         .eq("id", customerId)
-        .maybeSingle();
+        .single();
 
-    if (customerResult.error) {
-      setError(
-        customerResult.error.message
-      );
-      setLoading(false);
-      return;
-    }
+      if (customerError) {
+        throw new Error(
+          `Customer: ${customerError.message}`
+        );
+      }
 
-    if (!customerResult.data) {
-      setError(
-        "Customer was not found."
-      );
-      setLoading(false);
-      return;
-    }
+      if (!customerData) {
+        throw new Error(
+          "Customer was not found."
+        );
+      }
 
-    const customerData =
-      customerResult.data as Customer;
+      const loadedCustomer =
+        customerData as Customer;
 
-    setCustomer(customerData);
+      setCustomer(loadedCustomer);
 
-    // Use the sales ledger as the current
-    // authoritative outstanding balance.
-    const salesResult =
-      await supabase
+      /*
+       * --------------------------------------------------------
+       * SALES
+       *
+       * Sales are associated with the customer
+       * through customer_name in the current system.
+       * --------------------------------------------------------
+       */
+
+      const {
+        data: salesData,
+        error: salesError,
+      } = await supabase
         .from("sales")
-        .select("balance_due")
+        .select("*")
         .eq(
           "customer_name",
-          customerData.customer_name
+          loadedCustomer.customer_name
+        )
+        .order("created_at", {
+          ascending: false,
+        });
+
+      if (salesError) {
+        throw new Error(
+          `Sales: ${salesError.message}`
+        );
+      }
+
+      /*
+       * Calculate effective balances rather than
+       * trusting historical balance_due values.
+       */
+
+      const normalizedSales =
+        (salesData || [])
+          .map((sale) => {
+            const total =
+              Number(
+                sale.total_amount || 0
+              );
+
+            const paid =
+              Number(
+                sale.amount_paid || 0
+              );
+
+            const balance = Math.max(
+              0,
+              total - paid
+            );
+
+            return {
+              ...(sale as Sale),
+              amount_paid: paid,
+              balance_due: balance,
+            };
+          });
+
+      setSales(normalizedSales);
+
+      /*
+       * --------------------------------------------------------
+       * PAYMENT HISTORY
+       *
+       * Load payments separately to avoid depending
+       * on a PostgREST relationship.
+       * --------------------------------------------------------
+       */
+
+      const saleIds =
+        normalizedSales.map(
+          (sale) => sale.id
         );
 
-    if (salesResult.error) {
-      setError(
-        salesResult.error.message
-      );
-      setLoading(false);
-      return;
-    }
+      if (saleIds.length > 0) {
+        const {
+          data: paymentData,
+          error: paymentError,
+        } = await supabase
+          .from("sale_payments")
+          .select(
+            `
+              id,
+              sale_id,
+              amount,
+              payment_method,
+              reference,
+              notes,
+              created_at
+            `
+          )
+          .in("sale_id", saleIds)
+          .order("created_at", {
+            ascending: false,
+          });
 
-    const ledgerBalance =
-      (salesResult.data ?? []).reduce(
+        if (paymentError) {
+          throw new Error(
+            `Payments: ${paymentError.message}`
+          );
+        }
+
+        setPayments(
+          (paymentData || []) as Payment[]
+        );
+      } else {
+        setPayments([]);
+      }
+    } catch (error) {
+      console.error(
+        "Customer payment page error:",
+        error
+      );
+
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to load customer account."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /*
+   * ------------------------------------------------------------
+   * OUTSTANDING SALES
+   * ------------------------------------------------------------
+   */
+
+  const outstandingSales =
+    useMemo(() => {
+      return sales.filter(
+        (sale) =>
+          Number(sale.balance_due) >
+          0
+      );
+    }, [sales]);
+
+  /*
+   * ------------------------------------------------------------
+   * SUMMARY
+   * ------------------------------------------------------------
+   */
+
+  const totalSales = useMemo(
+    () =>
+      sales.reduce(
         (sum, sale) =>
           sum +
           Number(
-            sale.balance_due ?? 0
+            sale.total_amount || 0
           ),
         0
-      );
+      ),
+    [sales]
+  );
 
-    setCurrentBalance(
-      ledgerBalance
+  const totalPaid = useMemo(
+    () =>
+      sales.reduce(
+        (sum, sale) =>
+          sum +
+          Number(
+            sale.amount_paid || 0
+          ),
+        0
+      ),
+    [sales]
+  );
+
+  const totalOutstanding = useMemo(
+    () =>
+      sales.reduce(
+        (sum, sale) =>
+          sum +
+          Number(
+            sale.balance_due || 0
+          ),
+        0
+      ),
+    [sales]
+  );
+
+  const selectedSale =
+    sales.find(
+      (sale) =>
+        sale.id === selectedSaleId
+    ) || null;
+
+  /*
+   * ------------------------------------------------------------
+   * SELECT SALE
+   * ------------------------------------------------------------
+   */
+
+  function handleSaleChange(
+    saleId: string
+  ) {
+    setSelectedSaleId(saleId);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const sale = sales.find(
+      (item) => item.id === saleId
     );
 
-    setLoading(false);
+    if (sale) {
+      setAmount(
+        Number(
+          sale.balance_due || 0
+        ).toFixed(2)
+      );
+    } else {
+      setAmount("");
+    }
   }
 
-  useEffect(() => {
-    loadCustomer();
-  }, [customerId]);
+  /*
+   * ------------------------------------------------------------
+   * RECORD PAYMENT
+   * ------------------------------------------------------------
+   */
 
   async function handleSubmit(
     event: React.FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
 
-    setError("");
-    setSuccess("");
+    setErrorMessage("");
+    setSuccessMessage("");
 
-    if (!customer) {
-      setError(
-        "Customer information is not available."
+    if (!selectedSale) {
+      setErrorMessage(
+        "Please select an outstanding sale."
       );
+
       return;
     }
 
@@ -159,101 +418,85 @@ export default function CustomerPaymentPage() {
       ) ||
       paymentAmount <= 0
     ) {
-      setError(
-        "Payment amount must be greater than zero."
+      setErrorMessage(
+        "Enter a valid payment amount greater than zero."
       );
+
       return;
     }
 
-    if (
-      currentBalance <= 0
-    ) {
-      setError(
-        "This customer has no outstanding balance."
+    const outstanding =
+      Number(
+        selectedSale.balance_due || 0
       );
-      return;
-    }
 
-    if (
-      paymentAmount >
-      currentBalance
-    ) {
-      setError(
+    if (paymentAmount > outstanding + 0.005) {
+      setErrorMessage(
         `Payment cannot exceed the outstanding balance of ${money(
-          currentBalance
+          outstanding
         )}.`
       );
+
       return;
     }
 
     if (!paymentMethod.trim()) {
-      setError(
-        "Please select a payment method."
+      setErrorMessage(
+        "Payment method is required."
       );
+
       return;
     }
 
     setSaving(true);
 
     try {
-      /*
-       * Use the existing database RPC.
-       *
-       * This keeps customer balance,
-       * sales.amount_paid,
-       * sales.balance_due and
-       * customer payment records synchronized.
-       */
-      const { data, error } =
-        await supabase.rpc(
-          "record_customer_payment",
-          {
-            p_customer_name:
-              customer.customer_name,
-
-            p_amount:
-              paymentAmount,
-
-            p_payment_method:
-              paymentMethod.trim(),
-
-            p_notes:
-              notes.trim() || null,
-          }
-        );
+      const {
+        data,
+        error,
+      } = await recordSalePayment(
+        selectedSale.id,
+        paymentAmount,
+        paymentMethod,
+        reference || null,
+        notes || null
+      );
 
       if (error) {
-        console.error(
-          "Customer payment error:",
-          error
-        );
+        throw error;
+      }
 
+      if (!data) {
         throw new Error(
-          error.message
+          "Payment was not returned by the database."
         );
       }
 
-      console.log(
-        "Customer payment recorded:",
-        data
-      );
-
-      setSuccess(
-        `${money(
+      setSuccessMessage(
+        `Payment of ${money(
           paymentAmount
-        )} payment recorded successfully.`
+        )} was recorded successfully.`
       );
 
       setAmount("");
+      setReference("");
       setNotes("");
+      setSelectedSaleId("");
 
-      // Reload the ledger after payment.
-      await loadCustomer();
+      /*
+       * Reload everything so the updated
+       * balance is immediately visible.
+       */
+      await loadCustomerAccount();
+    } catch (error) {
+      console.error(
+        "Record payment error:",
+        error
+      );
 
-    } catch (paymentError) {
-      setError(
-        paymentError instanceof Error
-          ? paymentError.message
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
           : "Failed to record payment."
       );
     } finally {
@@ -261,263 +504,725 @@ export default function CustomerPaymentPage() {
     }
   }
 
+  /*
+   * ------------------------------------------------------------
+   * LOADING
+   * ------------------------------------------------------------
+   */
+
   if (loading) {
     return (
       <main className="space-y-6 p-6">
-
-        <Link
-          href={`/customers/${customerId}`}
-          className="text-sm font-medium text-blue-600 hover:underline"
-        >
-          ← Back to Customer Account
-        </Link>
-
-        <div className="rounded-xl border bg-white p-10 text-center shadow-sm">
-          Loading customer...
+        <div className="rounded-lg border bg-white p-10 text-center">
+          Loading customer account...
         </div>
-
       </main>
     );
   }
+
+  /*
+   * ------------------------------------------------------------
+   * ERROR / CUSTOMER NOT FOUND
+   * ------------------------------------------------------------
+   */
 
   if (!customer) {
     return (
       <main className="space-y-6 p-6">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-700">
+          <h1 className="text-xl font-bold">
+            Customer Not Found
+          </h1>
 
-        <Link
-          href="/customers"
-          className="text-sm font-medium text-blue-600 hover:underline"
-        >
-          ← Back to Customers
-        </Link>
-
-        <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">
-          {error || "Customer was not found."}
+          <p className="mt-2">
+            {errorMessage ||
+              "The requested customer could not be found."}
+          </p>
         </div>
 
+        <Link
+          href="/customers/accounts"
+          className="inline-flex rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white"
+        >
+          Back to Customer Accounts
+        </Link>
       </main>
     );
   }
 
+  /*
+   * ------------------------------------------------------------
+   * RENDER
+   * ------------------------------------------------------------
+   */
+
   return (
-    <main className="max-w-2xl space-y-8 p-6">
+    <main className="space-y-6 p-6">
+      {/* HEADER */}
 
-      {/* Header */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <Link
+            href="/customers/accounts"
+            className="text-sm font-medium text-blue-600 hover:underline"
+          >
+            ← Customer Accounts
+          </Link>
 
-      <div>
+          <h1 className="mt-2 text-3xl font-bold">
+            Record Customer Payment
+          </h1>
 
-        <Link
-          href={`/customers/${customer.id}`}
-          className="text-sm font-medium text-blue-600 hover:underline"
-        >
-          ← Back to Customer Account
-        </Link>
+          <p className="mt-1 text-gray-600">
+            Record a payment against an
+            outstanding customer sale.
+          </p>
+        </div>
 
-        <h1 className="mt-3 text-3xl font-bold">
-          Record Customer Payment
-        </h1>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/customers/statements?customer=${encodeURIComponent(
+              customer.customer_name
+            )}`}
+            className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+          >
+            Customer Statement
+          </Link>
 
-        <p className="mt-1 text-gray-600">
-          Record a payment for{" "}
-          <span className="font-medium">
-            {customer.customer_name}
-          </span>
-          .
-        </p>
-
+          <Link
+            href="/payments/history"
+            className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+          >
+            Payment History
+          </Link>
+        </div>
       </div>
 
+      {/* CUSTOMER INFORMATION */}
 
-      {/* Current Balance */}
+      <section className="rounded-lg border bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm text-gray-500">
+              Customer
+            </p>
 
-      <section className="rounded-xl border bg-white p-6 shadow-sm">
+            <h2 className="mt-1 text-2xl font-bold">
+              {customer.customer_name}
+            </h2>
 
-        <p className="text-sm font-medium text-gray-500">
-          Current Outstanding Balance
-        </p>
+            {customer.phone && (
+              <p className="mt-1 text-sm text-gray-600">
+                {customer.phone}
+              </p>
+            )}
 
-        <p className="mt-2 text-3xl font-bold text-red-600">
-          {money(currentBalance)}
-        </p>
+            {customer.address && (
+              <p className="mt-1 text-sm text-gray-600">
+                {customer.address}
+              </p>
+            )}
+          </div>
 
-        <p className="mt-2 text-sm text-gray-500">
-          Payment cannot exceed this amount.
-        </p>
-
+          {customer.customer_type && (
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium">
+              {customer.customer_type}
+            </span>
+          )}
+        </div>
       </section>
 
+      {/* SUMMARY */}
 
-      {/* Success */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">
+            Total Sales
+          </p>
 
-      {success && (
+          <p className="mt-2 text-2xl font-bold">
+            {money(totalSales)}
+          </p>
+        </div>
+
+        <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">
+            Total Paid
+          </p>
+
+          <p className="mt-2 text-2xl font-bold text-green-600">
+            {money(totalPaid)}
+          </p>
+        </div>
+
+        <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">
+            Outstanding Balance
+          </p>
+
+          <p className="mt-2 text-2xl font-bold text-red-600">
+            {money(totalOutstanding)}
+          </p>
+        </div>
+      </div>
+
+      {/* SUCCESS */}
+
+      {successMessage && (
         <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
-
-          <p className="font-medium">
+          <p className="font-semibold">
             Payment Successful
           </p>
 
           <p className="mt-1 text-sm">
-            {success}
+            {successMessage}
           </p>
-
-          <Link
-            href={`/customers/${customer.id}`}
-            className="mt-3 inline-block font-medium underline"
-          >
-            View Customer Account
-          </Link>
-
         </div>
       )}
 
+      {/* ERROR */}
 
-      {/* Error */}
-
-      {error && (
+      {errorMessage && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-
-          <p className="font-medium">
+          <p className="font-semibold">
             Payment Error
           </p>
 
           <p className="mt-1 text-sm">
-            {error}
+            {errorMessage}
           </p>
-
         </div>
       )}
 
+      {/* PAYMENT FORM */}
 
-      {/* Payment Form */}
+      <section className="rounded-lg border bg-white p-6 shadow-sm">
+        <div className="mb-5">
+          <h2 className="text-xl font-bold">
+            Record Payment
+          </h2>
 
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-6 rounded-xl border bg-white p-6 shadow-sm"
-      >
-
-        <div>
-
-          <label className="mb-2 block font-medium">
-            Payment Amount
-          </label>
-
-          <input
-            type="number"
-            min="0.01"
-            max={currentBalance}
-            step="0.01"
-            value={amount}
-            onChange={(event) =>
-              setAmount(
-                event.target.value
-              )
-            }
-            placeholder="Enter payment amount"
-            className="w-full rounded-lg border p-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-            required
-          />
-
-          <p className="mt-1 text-xs text-gray-500">
-            Maximum payment:{" "}
-            {money(currentBalance)}
+          <p className="mt-1 text-sm text-gray-500">
+            Select an outstanding sale and
+            enter the amount received.
           </p>
-
         </div>
 
+        {outstandingSales.length ===
+        0 ? (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-6 text-green-700">
+            <p className="font-semibold">
+              No outstanding balance
+            </p>
 
-        <div>
-
-          <label className="mb-2 block font-medium">
-            Payment Method
-          </label>
-
-          <select
-            value={paymentMethod}
-            onChange={(event) =>
-              setPaymentMethod(
-                event.target.value
-              )
-            }
-            className="w-full rounded-lg border p-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            <p className="mt-1 text-sm">
+              This customer currently has
+              no outstanding sales requiring
+              payment.
+            </p>
+          </div>
+        ) : (
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-5"
           >
-            <option value="Cash">
-              Cash
-            </option>
+            {/* SALE */}
 
-            <option value="Bank Transfer">
-              Bank Transfer
-            </option>
+            <div>
+              <label
+                htmlFor="sale"
+                className="mb-2 block text-sm font-semibold"
+              >
+                Outstanding Sale
+              </label>
 
-            <option value="Mobile Money">
-              Mobile Money
-            </option>
+              <select
+                id="sale"
+                value={selectedSaleId}
+                onChange={(event) =>
+                  handleSaleChange(
+                    event.target.value
+                  )
+                }
+                className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2"
+                disabled={saving}
+              >
+                <option value="">
+                  Select outstanding sale
+                </option>
 
-            <option value="Cheque">
-              Cheque
-            </option>
+                {outstandingSales.map(
+                  (sale) => (
+                    <option
+                      key={sale.id}
+                      value={sale.id}
+                    >
+                      {formatDate(
+                        sale.created_at
+                      )}{" "}
+                      —{" "}
+                      {sale.product_name}{" "}
+                      —{" "}
+                      Balance{" "}
+                      {money(
+                        sale.balance_due
+                      )}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
 
-            <option value="Other">
-              Other
-            </option>
-          </select>
+            {/* SELECTED SALE DETAILS */}
 
-        </div>
+            {selectedSale && (
+              <div className="rounded-lg bg-gray-50 p-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <p className="text-xs text-gray-500">
+                      Product
+                    </p>
 
+                    <p className="mt-1 font-semibold">
+                      {
+                        selectedSale.product_name
+                      }
+                    </p>
+                  </div>
 
-        <div>
+                  <div>
+                    <p className="text-xs text-gray-500">
+                      Sale Date
+                    </p>
 
-          <label className="mb-2 block font-medium">
-            Notes
-          </label>
+                    <p className="mt-1 font-semibold">
+                      {formatDate(
+                        selectedSale.created_at
+                      )}
+                    </p>
+                  </div>
 
-          <textarea
-            value={notes}
-            onChange={(event) =>
-              setNotes(
-                event.target.value
-              )
-            }
-            rows={4}
-            placeholder="Optional payment notes or reference"
-            className="w-full rounded-lg border p-3 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-          />
+                  <div>
+                    <p className="text-xs text-gray-500">
+                      Sale Total
+                    </p>
 
-        </div>
+                    <p className="mt-1 font-semibold">
+                      {money(
+                        selectedSale.total_amount
+                      )}
+                    </p>
+                  </div>
 
+                  <div>
+                    <p className="text-xs text-gray-500">
+                      Outstanding
+                    </p>
 
-        <button
-          type="submit"
-          disabled={
-            saving ||
-            currentBalance <= 0
-          }
-          className="w-full rounded-lg bg-blue-600 px-5 py-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {saving
-            ? "Recording Payment..."
-            : "Record Payment"}
-        </button>
+                    <p className="mt-1 font-bold text-red-600">
+                      {money(
+                        selectedSale.balance_due
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
-      </form>
+            {/* AMOUNT */}
 
+            <div>
+              <label
+                htmlFor="amount"
+                className="mb-2 block text-sm font-semibold"
+              >
+                Payment Amount
+              </label>
 
-      {/* Accounting Information */}
+              <input
+                id="amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={amount}
+                onChange={(event) =>
+                  setAmount(
+                    event.target.value
+                  )
+                }
+                placeholder="0.00"
+                disabled={saving}
+                className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2"
+              />
 
-      <section className="rounded-xl border bg-gray-50 p-5">
+              {selectedSale && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Maximum payment:{" "}
+                  <span className="font-semibold">
+                    {money(
+                      selectedSale.balance_due
+                    )}
+                  </span>
+                </p>
+              )}
+            </div>
 
-        <h2 className="font-semibold">
-          Payment Processing
-        </h2>
+            {/* PAYMENT METHOD */}
 
-        <p className="mt-2 text-sm text-gray-600">
-          This payment is processed through the
-          existing customer payment workflow. The
-          database applies the payment to outstanding
-          sales and records the payment separately.
-        </p>
+            <div>
+              <label
+                htmlFor="payment-method"
+                className="mb-2 block text-sm font-semibold"
+              >
+                Payment Method
+              </label>
 
+              <select
+                id="payment-method"
+                value={paymentMethod}
+                onChange={(event) =>
+                  setPaymentMethod(
+                    event.target.value
+                  )
+                }
+                disabled={saving}
+                className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2"
+              >
+                <option value="Cash">
+                  Cash
+                </option>
+
+                <option value="Mobile Money">
+                  Mobile Money
+                </option>
+
+                <option value="Bank Transfer">
+                  Bank Transfer
+                </option>
+
+                <option value="Cheque">
+                  Cheque
+                </option>
+
+                <option value="Card">
+                  Card
+                </option>
+
+                <option value="Other">
+                  Other
+                </option>
+              </select>
+            </div>
+
+            {/* REFERENCE */}
+
+            <div>
+              <label
+                htmlFor="reference"
+                className="mb-2 block text-sm font-semibold"
+              >
+                Reference
+                <span className="ml-1 font-normal text-gray-400">
+                  (optional)
+                </span>
+              </label>
+
+              <input
+                id="reference"
+                type="text"
+                value={reference}
+                onChange={(event) =>
+                  setReference(
+                    event.target.value
+                  )
+                }
+                placeholder="Receipt number, transaction ID, cheque number..."
+                disabled={saving}
+                className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2"
+              />
+            </div>
+
+            {/* NOTES */}
+
+            <div>
+              <label
+                htmlFor="notes"
+                className="mb-2 block text-sm font-semibold"
+              >
+                Notes
+                <span className="ml-1 font-normal text-gray-400">
+                  (optional)
+                </span>
+              </label>
+
+              <textarea
+                id="notes"
+                value={notes}
+                onChange={(event) =>
+                  setNotes(
+                    event.target.value
+                  )
+                }
+                placeholder="Additional payment notes..."
+                rows={3}
+                disabled={saving}
+                className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2"
+              />
+            </div>
+
+            {/* BUTTONS */}
+
+            <div className="flex flex-wrap gap-3 border-t pt-5">
+              <button
+                type="submit"
+                disabled={
+                  saving ||
+                  !selectedSaleId ||
+                  !amount
+                }
+                className="rounded-lg bg-green-600 px-5 py-2.5 font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving
+                  ? "Recording Payment..."
+                  : "Record Payment"}
+              </button>
+
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  setSelectedSaleId("");
+                  setAmount("");
+                  setReference("");
+                  setNotes("");
+                  setErrorMessage("");
+                  setSuccessMessage("");
+                }}
+                className="rounded-lg border bg-white px-5 py-2.5 font-semibold hover:bg-gray-50 disabled:opacity-50"
+              >
+                Clear
+              </button>
+            </div>
+          </form>
+        )}
       </section>
 
+      {/* OUTSTANDING SALES */}
+
+      <section className="rounded-lg border bg-white shadow-sm">
+        <div className="border-b p-5">
+          <h2 className="text-xl font-bold">
+            Outstanding Sales
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Sales that still have an amount
+            due.
+          </p>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="border-b p-3 text-left text-sm font-semibold">
+                  Date
+                </th>
+
+                <th className="border-b p-3 text-left text-sm font-semibold">
+                  Product
+                </th>
+
+                <th className="border-b p-3 text-right text-sm font-semibold">
+                  Quantity
+                </th>
+
+                <th className="border-b p-3 text-right text-sm font-semibold">
+                  Total
+                </th>
+
+                <th className="border-b p-3 text-right text-sm font-semibold">
+                  Paid
+                </th>
+
+                <th className="border-b p-3 text-right text-sm font-semibold">
+                  Balance
+                </th>
+
+                <th className="border-b p-3 text-center text-sm font-semibold">
+                  Action
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {outstandingSales.length ===
+              0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="p-8 text-center text-gray-500"
+                  >
+                    No outstanding sales.
+                  </td>
+                </tr>
+              ) : (
+                outstandingSales.map(
+                  (sale) => (
+                    <tr
+                      key={sale.id}
+                      className="border-b last:border-b-0 hover:bg-gray-50"
+                    >
+                      <td className="whitespace-nowrap p-3 text-sm">
+                        {formatDate(
+                          sale.created_at
+                        )}
+                      </td>
+
+                      <td className="p-3 font-medium">
+                        {sale.product_name}
+                      </td>
+
+                      <td className="p-3 text-right">
+                        {Number(
+                          sale.quantity
+                        ).toLocaleString(
+                          "en-GH"
+                        )}
+                      </td>
+
+                      <td className="whitespace-nowrap p-3 text-right">
+                        {money(
+                          sale.total_amount
+                        )}
+                      </td>
+
+                      <td className="whitespace-nowrap p-3 text-right text-green-600">
+                        {money(
+                          sale.amount_paid
+                        )}
+                      </td>
+
+                      <td className="whitespace-nowrap p-3 text-right font-bold text-red-600">
+                        {money(
+                          sale.balance_due
+                        )}
+                      </td>
+
+                      <td className="p-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleSaleChange(
+                              sale.id
+                            )
+                          }
+                          className="rounded-md border px-3 py-1.5 text-xs font-semibold hover:bg-gray-50"
+                        >
+                          Select
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* PAYMENT HISTORY */}
+
+      <section className="rounded-lg border bg-white shadow-sm">
+        <div className="border-b p-5">
+          <h2 className="text-xl font-bold">
+            Customer Payment History
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Payments recorded against this
+            customer's sales.
+          </p>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="border-b p-3 text-left text-sm font-semibold">
+                  Date
+                </th>
+
+                <th className="border-b p-3 text-right text-sm font-semibold">
+                  Amount
+                </th>
+
+                <th className="border-b p-3 text-left text-sm font-semibold">
+                  Method
+                </th>
+
+                <th className="border-b p-3 text-left text-sm font-semibold">
+                  Reference
+                </th>
+
+                <th className="border-b p-3 text-left text-sm font-semibold">
+                  Notes
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {payments.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="p-8 text-center text-gray-500"
+                  >
+                    No payments recorded
+                    for this customer.
+                  </td>
+                </tr>
+              ) : (
+                payments.map(
+                  (payment) => (
+                    <tr
+                      key={payment.id}
+                      className="border-b last:border-b-0"
+                    >
+                      <td className="whitespace-nowrap p-3 text-sm">
+                        {formatDate(
+                          payment.created_at
+                        )}
+                      </td>
+
+                      <td className="whitespace-nowrap p-3 text-right font-semibold text-green-600">
+                        {money(
+                          payment.amount
+                        )}
+                      </td>
+
+                      <td className="p-3">
+                        {payment.payment_method ||
+                          "—"}
+                      </td>
+
+                      <td className="p-3">
+                        {payment.reference ||
+                          "—"}
+                      </td>
+
+                      <td className="p-3">
+                        {payment.notes ||
+                          "—"}
+                      </td>
+                    </tr>
+                  )
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
   );
 }
