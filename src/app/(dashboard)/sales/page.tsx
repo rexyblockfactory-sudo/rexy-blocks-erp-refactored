@@ -17,11 +17,8 @@ export default function SalesPage() {
   // STATE
   // ============================================================
 
-  // IMPORTANT:
-  // Start with false so the server-rendered HTML and the first
-  // client render are identical.
   const [loading, setLoading] =
-    useState(false);
+    useState(true);
 
   const [sales, setSales] =
     useState<Sale[]>([]);
@@ -45,12 +42,7 @@ export default function SalesPage() {
         if (result.error) {
           console.error(
             "Sales error:",
-            {
-              message:
-                result.error.message,
-              details:
-                result.error.cause,
-            }
+            result.error
           );
 
           setErrorMessage(
@@ -63,7 +55,7 @@ export default function SalesPage() {
         }
 
         setSales(
-          result.data || []
+          result.data ?? []
         );
       } catch (error) {
         console.error(
@@ -94,17 +86,32 @@ export default function SalesPage() {
   }, [loadSales]);
 
   // ============================================================
-  // HELPERS
+  // MONEY FORMAT
   // ============================================================
 
   function formatMoney(
-    value: number | string | null | undefined
+    value:
+      | number
+      | string
+      | null
+      | undefined
   ) {
     const numberValue =
       Number(value ?? 0);
 
-    return `GH₵${numberValue.toFixed(2)}`;
+    return new Intl.NumberFormat(
+      "en-GH",
+      {
+        style: "currency",
+        currency: "GHS",
+        minimumFractionDigits: 2,
+      }
+    ).format(numberValue);
   }
+
+  // ============================================================
+  // DATE FORMAT
+  // ============================================================
 
   function formatDate(
     value:
@@ -127,19 +134,46 @@ export default function SalesPage() {
       return "—";
     }
 
-    return date.toLocaleString();
+    return date.toLocaleString(
+      "en-GH",
+      {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }
+    );
   }
 
-  function paymentStatus(
+  // ============================================================
+  // PAYMENT STATUS
+  // ============================================================
+
+  function getPaymentStatus(
     sale: Sale
   ) {
+    const total =
+      Number(
+        sale.total_amount ?? 0
+      );
+
+    const paid =
+      Number(
+        sale.amount_paid ?? 0
+      );
+
     const balance =
       Number(
         sale.balance_due ?? 0
       );
 
-    if (balance <= 0) {
+    if (
+      balance <= 0 &&
+      paid >= total
+    ) {
       return "Paid";
+    }
+
+    if (paid > 0) {
+      return "Partially Paid";
     }
 
     return "Unpaid";
@@ -182,15 +216,25 @@ export default function SalesPage() {
       0
     );
 
+  const totalProfit =
+    sales.reduce(
+      (sum, sale) =>
+        sum +
+        Number(
+          sale.gross_profit ?? 0
+        ),
+      0
+    );
+
   // ============================================================
   // RENDER
   // ============================================================
 
   return (
     <main className="space-y-8">
-      {/* ========================================================
+      {/* ======================================================
           HEADER
-      ======================================================== */}
+      ====================================================== */}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -204,13 +248,13 @@ export default function SalesPage() {
           </p>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Link
-  href="/sales/new"
-  className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
->
-  New Sale
-</Link>
+            href="/sales/new"
+            className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+          >
+            New Sale
+          </Link>
 
           <Link
             href="/sales/history"
@@ -221,11 +265,13 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {/* ========================================================
-          SUMMARY CARDS
-      ======================================================== */}
+      {/* ======================================================
+          SUMMARY
+      ====================================================== */}
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        {/* TOTAL SALES */}
+
         <div className="rounded-xl border bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">
             Total Sales
@@ -235,6 +281,8 @@ export default function SalesPage() {
             {totalSales}
           </p>
         </div>
+
+        {/* REVENUE */}
 
         <div className="rounded-xl border bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">
@@ -248,6 +296,8 @@ export default function SalesPage() {
           </p>
         </div>
 
+        {/* PAID */}
+
         <div className="rounded-xl border bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">
             Amount Paid
@@ -260,6 +310,8 @@ export default function SalesPage() {
           </p>
         </div>
 
+        {/* OUTSTANDING */}
+
         <div className="rounded-xl border bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">
             Outstanding
@@ -271,13 +323,35 @@ export default function SalesPage() {
             )}
           </p>
         </div>
+
+        {/* PROFIT */}
+
+        <div className="rounded-xl border bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">
+            Gross Profit
+          </p>
+
+          <p
+            className={`mt-2 text-2xl font-bold ${
+              totalProfit >= 0
+                ? "text-green-700"
+                : "text-red-700"
+            }`}
+          >
+            {formatMoney(
+              totalProfit
+            )}
+          </p>
+        </div>
       </section>
 
-      {/* ========================================================
-          SALES TABLE
-      ======================================================== */}
+      {/* ======================================================
+          SALES LIST
+      ====================================================== */}
 
       <section className="space-y-4">
+        {/* SECTION HEADER */}
+
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-xl font-semibold">
@@ -290,18 +364,12 @@ export default function SalesPage() {
             </p>
           </div>
 
-          {/* ====================================================
-              REFRESH BUTTON
-              ==================================================== */}
-
           <button
             type="button"
             onClick={() => {
               void loadSales();
             }}
-            disabled={Boolean(
-              loading
-            )}
+            disabled={loading}
             className="rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
@@ -310,9 +378,9 @@ export default function SalesPage() {
           </button>
         </div>
 
-        {/* ======================================================
+        {/* ====================================================
             ERROR
-        ====================================================== */}
+        ==================================================== */}
 
         {errorMessage && (
           <div
@@ -326,9 +394,9 @@ export default function SalesPage() {
           </div>
         )}
 
-        {/* ======================================================
+        {/* ====================================================
             LOADING
-        ====================================================== */}
+        ==================================================== */}
 
         {loading && (
           <div className="rounded-xl border bg-white p-8 text-center">
@@ -338,9 +406,9 @@ export default function SalesPage() {
           </div>
         )}
 
-        {/* ======================================================
-            EMPTY
-        ====================================================== */}
+        {/* ====================================================
+            EMPTY STATE
+        ==================================================== */}
 
         {!loading &&
           !errorMessage &&
@@ -354,12 +422,19 @@ export default function SalesPage() {
                 Create your first sale to
                 see it here.
               </p>
+
+              <Link
+                href="/sales/new"
+                className="mt-4 inline-block rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+              >
+                Create Sale
+              </Link>
             </div>
           )}
 
-        {/* ======================================================
-            TABLE
-        ====================================================== */}
+        {/* ====================================================
+            SALES TABLE
+        ==================================================== */}
 
         {!loading &&
           sales.length > 0 && (
@@ -421,8 +496,14 @@ export default function SalesPage() {
                   {sales.map(
                     (sale) => {
                       const status =
-                        paymentStatus(
+                        getPaymentStatus(
                           sale
+                        );
+
+                      const profit =
+                        Number(
+                          sale.gross_profit ??
+                            0
                         );
 
                       return (
@@ -441,25 +522,19 @@ export default function SalesPage() {
                           {/* CUSTOMER */}
 
                           <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-900">
-                            {
-                              sale.customer_name
-                            }
+                            {sale.customer_name}
                           </td>
 
                           {/* PRODUCT */}
 
-                          <td className="px-4 py-4 text-sm text-gray-700">
-                            {
-                              sale.product_name
-                            }
+                          <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-700">
+                            {sale.product_name}
                           </td>
 
                           {/* QUANTITY */}
 
                           <td className="whitespace-nowrap px-4 py-4 text-right text-sm text-gray-700">
-                            {
-                              sale.quantity
-                            }
+                            {sale.quantity}
                           </td>
 
                           {/* UNIT PRICE */}
@@ -506,10 +581,7 @@ export default function SalesPage() {
 
                           <td
                             className={`whitespace-nowrap px-4 py-4 text-right text-sm font-semibold ${
-                              Number(
-                                sale.gross_profit ??
-                                  0
-                              ) >= 0
+                              profit >= 0
                                 ? "text-green-700"
                                 : "text-red-700"
                             }`}
@@ -519,7 +591,7 @@ export default function SalesPage() {
                             )}
                           </td>
 
-                          {/* PAYMENT STATUS */}
+                          {/* STATUS */}
 
                           <td className="whitespace-nowrap px-4 py-4 text-center">
                             <span
@@ -527,6 +599,9 @@ export default function SalesPage() {
                                 status ===
                                 "Paid"
                                   ? "bg-green-100 text-green-700"
+                                  : status ===
+                                    "Partially Paid"
+                                  ? "bg-blue-100 text-blue-700"
                                   : "bg-yellow-100 text-yellow-700"
                               }`}
                             >
@@ -539,7 +614,7 @@ export default function SalesPage() {
                           <td className="whitespace-nowrap px-4 py-4 text-center">
                             <Link
                               href={`/sales/${sale.id}`}
-                              className="text-sm font-semibold text-blue-600 hover:underline"
+                              className="rounded-md px-3 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 hover:underline"
                             >
                               View
                             </Link>

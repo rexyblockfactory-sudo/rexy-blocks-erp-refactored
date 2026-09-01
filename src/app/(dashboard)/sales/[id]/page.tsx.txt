@@ -1,0 +1,30 @@
+"use client";
+
+import { useParams } from "next/navigation";
+
+export default function SaleDetailsPage() {
+  const params = useParams();
+
+  const saleId =
+    typeof params.id === "string"
+      ? params.id
+      : Array.isArray(params.id)
+      ? params.id[0]
+      : "";
+
+  if (!saleId) {
+    return (
+      <main className="space-y-6">
+        <p className="text-red-600">
+          Sale ID is missing.
+        </p>
+      </main>
+    );
+  }
+
+  return (
+    <main>
+      {/* Your sale details and payment form */}
+    </main>
+  );
+}

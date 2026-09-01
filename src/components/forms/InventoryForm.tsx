@@ -3,6 +3,26 @@
 import { useState } from "react";
 import { createInventoryItem } from "@/services/inventory";
 
+const CATEGORIES = [
+  "Raw Material",
+  "Building Material",
+  "Finished Product",
+  "Utility",
+  "Power",
+  "Fuel",
+  "Other",
+];
+
+const UNITS = [
+  "Bag",
+  "Cubic metre",
+  "Litre",
+  "Piece",
+  "Kwh",
+  "Ton",
+  "Other",
+];
+
 export default function InventoryForm() {
   const [itemName, setItemName] = useState("");
   const [category, setCategory] = useState("");
@@ -21,13 +41,13 @@ export default function InventoryForm() {
       return;
     }
 
-    if (!category.trim()) {
-      alert("Please enter the category.");
+    if (!category) {
+      alert("Please select a category.");
       return;
     }
 
-    if (!unit.trim()) {
-      alert("Please enter the unit.");
+    if (!unit) {
+      alert("Please select a unit.");
       return;
     }
 
@@ -35,7 +55,7 @@ export default function InventoryForm() {
     const unitCostNumber = Number(unitCost);
 
     if (
-      !quantity ||
+      !Number.isFinite(quantityNumber) ||
       quantityNumber < 0
     ) {
       alert("Please enter a valid quantity.");
@@ -43,7 +63,7 @@ export default function InventoryForm() {
     }
 
     if (
-      !unitCost ||
+      !Number.isFinite(unitCostNumber) ||
       unitCostNumber < 0
     ) {
       alert("Please enter a valid unit cost.");
@@ -52,37 +72,49 @@ export default function InventoryForm() {
 
     setSaving(true);
 
-    const { error } =
-      await createInventoryItem({
-        item_name: itemName.trim(),
-        category: category.trim(),
-        unit: unit.trim(),
-        quantity: quantityNumber,
-        unit_cost: unitCostNumber,
-      });
+    try {
+      const { error } =
+        await createInventoryItem({
+          item_name: itemName.trim(),
+          category,
+          unit,
+          quantity: quantityNumber,
+          unit_cost: unitCostNumber,
+        });
 
-    if (error) {
+      if (error) {
+        console.error(
+          "Inventory error:",
+          error
+        );
+
+        alert(error.message);
+        return;
+      }
+
+      alert(
+        "Inventory item added successfully."
+      );
+
+      setItemName("");
+      setCategory("");
+      setUnit("");
+      setQuantity("");
+      setUnitCost("");
+    } catch (error) {
       console.error(
-        "Inventory error:",
+        "Unexpected inventory error:",
         error
       );
 
-      alert(error.message);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to add inventory item."
+      );
+    } finally {
       setSaving(false);
-      return;
     }
-
-    alert(
-      "Inventory item added successfully."
-    );
-
-    setItemName("");
-    setCategory("");
-    setUnit("");
-    setQuantity("");
-    setUnitCost("");
-
-    setSaving(false);
   }
 
   return (
@@ -91,11 +123,15 @@ export default function InventoryForm() {
       className="space-y-5 rounded-lg bg-white p-6 shadow"
     >
       <div>
-        <label className="mb-2 block font-medium">
+        <label
+          htmlFor="item-name"
+          className="mb-2 block font-medium"
+        >
           Item Name
         </label>
 
         <input
+          id="item-name"
           type="text"
           value={itemName}
           onChange={(e) =>
@@ -108,45 +144,79 @@ export default function InventoryForm() {
       </div>
 
       <div>
-        <label className="mb-2 block font-medium">
+        <label
+          htmlFor="category"
+          className="mb-2 block font-medium"
+        >
           Category
         </label>
 
-        <input
-          type="text"
+        <select
+          id="category"
           value={category}
           onChange={(e) =>
             setCategory(e.target.value)
           }
           className="w-full rounded border p-3"
-          placeholder="Example: Building Material"
           required
-        />
+        >
+          <option value="">
+            Select category
+          </option>
+
+          {CATEGORIES.map((value) => (
+            <option
+              key={value}
+              value={value}
+            >
+              {value}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div>
-        <label className="mb-2 block font-medium">
+        <label
+          htmlFor="unit"
+          className="mb-2 block font-medium"
+        >
           Unit
         </label>
 
-        <input
-          type="text"
+        <select
+          id="unit"
           value={unit}
           onChange={(e) =>
             setUnit(e.target.value)
           }
           className="w-full rounded border p-3"
-          placeholder="Example: Bag, Litre, Piece"
           required
-        />
+        >
+          <option value="">
+            Select unit
+          </option>
+
+          {UNITS.map((value) => (
+            <option
+              key={value}
+              value={value}
+            >
+              {value}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div>
-        <label className="mb-2 block font-medium">
-          Quantity
+        <label
+          htmlFor="quantity"
+          className="mb-2 block font-medium"
+        >
+          Opening Quantity
         </label>
 
         <input
+          id="quantity"
           type="number"
           min="0"
           step="0.01"
@@ -155,17 +225,21 @@ export default function InventoryForm() {
             setQuantity(e.target.value)
           }
           className="w-full rounded border p-3"
-          placeholder="Enter quantity"
+          placeholder="Example: 50"
           required
         />
       </div>
 
       <div>
-        <label className="mb-2 block font-medium">
+        <label
+          htmlFor="unit-cost"
+          className="mb-2 block font-medium"
+        >
           Unit Cost (GH₵)
         </label>
 
         <input
+          id="unit-cost"
           type="number"
           min="0"
           step="0.01"
@@ -174,9 +248,21 @@ export default function InventoryForm() {
             setUnitCost(e.target.value)
           }
           className="w-full rounded border p-3"
-          placeholder="Enter unit cost"
+          placeholder="Example: 75"
           required
         />
+      </div>
+
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+        <p className="font-semibold">
+          Opening Stock
+        </p>
+
+        <p className="mt-1">
+          The quantity entered here will be
+          treated as the opening stock for this
+          inventory item.
+        </p>
       </div>
 
       <button
@@ -186,7 +272,7 @@ export default function InventoryForm() {
       >
         {saving
           ? "Saving..."
-          : "Save Inventory Item"}
+          : "Add Opening Inventory"}
       </button>
     </form>
   );

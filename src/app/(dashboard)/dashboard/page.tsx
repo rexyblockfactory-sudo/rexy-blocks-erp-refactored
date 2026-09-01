@@ -1,7 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from "recharts";
 
 import { supabase } from "@/lib/supabase/client";
 
@@ -21,9 +38,9 @@ interface Sale {
   customer_name: string | null;
   product_name?: string | null;
   quantity?: number | null;
-  total_amount: number;
-  amount_paid: number;
-  balance_due: number;
+  total_amount: number | null;
+  amount_paid: number | null;
+  balance_due: number | null;
   cost_per_unit?: number | null;
   cogs?: number | null;
   gross_profit?: number | null;
@@ -34,7 +51,7 @@ interface Sale {
 interface Payment {
   id: string;
   sale_id: string;
-  amount: number;
+  amount: number | null;
   created_at: string;
 }
 
@@ -42,7 +59,7 @@ interface Expense {
   id: string;
   expense_name: string;
   category: string;
-  amount: number;
+  amount: number | null;
   notes: string | null;
   created_at: string;
 }
@@ -65,71 +82,142 @@ interface InventoryItem {
 interface StockAlert {
   id?: string;
   item_name: string;
-  minimum_quantity: number;
+  minimum_quantity: number | null;
+}
+
+interface MonthlyProductionRecord {
+  id: string;
+  quantity: number | null;
+  created_at: string;
+}
+
+interface MonthlyChartData {
+  key: string;
+  month: string;
+  sales: number;
+  production: number;
+  profit: number;
+  credit: number;
 }
 
 function money(value: number): string {
-  const number = Number(value || 0);
+  const amount =
+    Number(value || 0);
 
-  return `GH₵${number.toLocaleString("en-GH", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return `GH₵${amount.toLocaleString(
+    "en-GH",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  )}`;
 }
 
-function number(value: number, decimals = 0): string {
-  const amount = Number(value || 0);
+function number(
+  value: number,
+  decimals = 0
+): string {
+  const amount =
+    Number(value || 0);
 
-  return amount.toLocaleString("en-GH", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
+  return amount.toLocaleString(
+    "en-GH",
+    {
+      minimumFractionDigits:
+        decimals,
+      maximumFractionDigits:
+        decimals,
+    }
+  );
 }
 
-function percent(value: number): string {
-  const amount = Number(value || 0);
+function percent(
+  value: number
+): string {
+  const amount =
+    Number(value || 0);
 
-  return `${amount.toFixed(2)}%`;
+  return `${amount.toFixed(
+    2
+  )}%`;
+}
+
+function getMonthKey(
+  value: string | Date
+): string {
+  const date =
+    new Date(value);
+
+  return `${date.getFullYear()}-${String(
+    date.getMonth() + 1
+  ).padStart(2, "0")}`;
 }
 
 export default function DashboardPage() {
-  /*
-   * ==========================================
-   * OPERATIONAL DASHBOARD STATE
-   * ==========================================
-   */
+  /* ========================================
+     OPERATIONAL STATE
+  ======================================== */
 
-  const [salesTotal, setSalesTotal] = useState(0);
+  const [
+    salesTotal,
+    setSalesTotal,
+  ] = useState(0);
 
-  const [productionTotal, setProductionTotal] =
-    useState(0);
+  const [
+    productionTotal,
+    setProductionTotal,
+  ] = useState(0);
 
-  const [productCount, setProductCount] =
-    useState(0);
+  const [
+    productCount,
+    setProductCount,
+  ] = useState(0);
 
-  const [lowStockCount, setLowStockCount] =
-    useState(0);
+  const [
+    lowStockCount,
+    setLowStockCount,
+  ] = useState(0);
 
   const [
     lowStockItems,
     setLowStockItems,
-  ] = useState<DashboardLowStockItem[]>([]);
+  ] = useState<
+    DashboardLowStockItem[]
+  >([]);
 
   const [
     recentSales,
     setRecentSales,
-  ] = useState<DashboardRecentSale[]>([]);
+  ] = useState<
+    DashboardRecentSale[]
+  >([]);
 
   const [
     recentProduction,
     setRecentProduction,
-  ] = useState<DashboardProductionRecord[]>([]);
+  ] = useState<
+    DashboardProductionRecord[]
+  >([]);
 
-  /*
-   * ==========================================
-   * RECEIVABLES
-   * ==========================================
-   */
+  /* ========================================
+     MONTHLY CHART DATA
+  ======================================== */
+
+  const [
+    monthlySales,
+    setMonthlySales,
+  ] = useState<Sale[]>([]);
+
+  const [
+    monthlyProduction,
+    setMonthlyProduction,
+  ] = useState<
+    MonthlyProductionRecord[]
+  >([]);
+
+  /* ========================================
+     RECEIVABLES
+  ======================================== */
 
   const [
     totalCollected,
@@ -166,11 +254,9 @@ export default function DashboardPage() {
     setDays90Plus,
   ] = useState(0);
 
-  /*
-   * ==========================================
-   * FINANCIAL STATE
-   * ==========================================
-   */
+  /* ========================================
+     FINANCIAL STATE
+  ======================================== */
 
   const [
     totalCogs,
@@ -210,13 +296,13 @@ export default function DashboardPage() {
   const [
     expenseCategories,
     setExpenseCategories,
-  ] = useState<ExpenseCategory[]>([]);
+  ] = useState<
+    ExpenseCategory[]
+  >([]);
 
-  /*
-   * ==========================================
-   * INVENTORY VALUE
-   * ==========================================
-   */
+  /* ========================================
+     INVENTORY VALUE
+  ======================================== */
 
   const [
     rawMaterialValue,
@@ -243,20 +329,14 @@ export default function DashboardPage() {
     setUncostedFinishedGoods,
   ] = useState(0);
 
-  /*
-   * ==========================================
-   * LOADING
-   * ==========================================
-   */
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-  const [loading, setLoading] =
-    useState(true);
-
-  /*
-   * ==========================================
-   * LOAD DASHBOARD
-   * ==========================================
-   */
+  /* ========================================
+     LOAD DASHBOARD
+  ======================================== */
 
   useEffect(() => {
     let mounted = true;
@@ -265,45 +345,84 @@ export default function DashboardPage() {
       try {
         setLoading(true);
 
-        /*
-         * --------------------------------------
-         * RECENT SALES
-         * --------------------------------------
-         */
+        const now =
+          new Date();
+
+        const twelveMonthsAgo =
+          new Date(
+            now.getFullYear(),
+            now.getMonth() - 11,
+            1
+          );
+
+        /* ------------------------------------
+           RECENT SALES - LATEST 5
+        ------------------------------------ */
 
         const {
-          data: sales,
-          error: salesError,
+          data: recentSalesData,
+          error: recentSalesError,
         } = await supabase
           .from("sales")
           .select("*")
-          .order("created_at", {
-            ascending: false,
-          })
+          .order(
+            "created_at",
+            {
+              ascending: false,
+            }
+          )
           .limit(5);
 
-        /*
-         * --------------------------------------
-         * RECENT PRODUCTION
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           RECENT PRODUCTION - LATEST 5
+
+           Used only by ProductionHistory.
+        ------------------------------------ */
 
         const {
-          data: production,
-          error: productionError,
+          data: recentProductionData,
+          error: recentProductionError,
         } = await supabase
           .from("production")
           .select("*")
-          .order("created_at", {
-            ascending: false,
-          })
+          .order(
+            "created_at",
+            {
+              ascending: false,
+            }
+          )
           .limit(5);
 
-        /*
-         * --------------------------------------
-         * INVENTORY
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           MONTHLY PRODUCTION - 12 MONTHS
+
+           Separate query for charts.
+        ------------------------------------ */
+
+        const {
+          data: monthlyProductionData,
+          error: monthlyProductionError,
+        } = await supabase
+          .from("production")
+          .select(`
+            id,
+            quantity,
+            created_at
+          `)
+          .gte(
+            "created_at",
+            twelveMonthsAgo.toISOString()
+          )
+          .order(
+            "created_at",
+            {
+              ascending: true,
+            }
+          );
+
+        /* ------------------------------------
+           INVENTORY
+        ------------------------------------ */
 
         const {
           data: inventory,
@@ -312,11 +431,9 @@ export default function DashboardPage() {
           .from("inventory")
           .select("*");
 
-        /*
-         * --------------------------------------
-         * STOCK ALERTS
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           STOCK ALERTS
+        ------------------------------------ */
 
         const {
           data: alerts,
@@ -325,18 +442,11 @@ export default function DashboardPage() {
           .from("stock_alerts")
           .select("*");
 
-        /*
-         * --------------------------------------
-         * ALL SALES
-         * --------------------------------------
-         *
-         * Required for:
-         * Revenue
-         * COGS
-         * Gross Profit
-         * Receivables
-         * Collections
-         */
+        /* ------------------------------------
+           ALL SALES
+
+           Used for financial totals.
+        ------------------------------------ */
 
         const {
           data: allSales,
@@ -358,11 +468,43 @@ export default function DashboardPage() {
             created_at
           `);
 
-        /*
-         * --------------------------------------
-         * ALL EXPENSES
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           MONTHLY SALES - 12 MONTHS
+        ------------------------------------ */
+
+        const {
+          data: monthlySalesData,
+          error: monthlySalesError,
+        } = await supabase
+          .from("sales")
+          .select(`
+            id,
+            customer_name,
+            product_name,
+            quantity,
+            total_amount,
+            amount_paid,
+            balance_due,
+            cost_per_unit,
+            cogs,
+            gross_profit,
+            gross_margin,
+            created_at
+          `)
+          .gte(
+            "created_at",
+            twelveMonthsAgo.toISOString()
+          )
+          .order(
+            "created_at",
+            {
+              ascending: true,
+            }
+          );
+
+        /* ------------------------------------
+           EXPENSES
+        ------------------------------------ */
 
         const {
           data: expenses,
@@ -377,27 +519,39 @@ export default function DashboardPage() {
             notes,
             created_at
           `)
-          .order("created_at", {
-            ascending: false,
-          });
+          .order(
+            "created_at",
+            {
+              ascending: false,
+            }
+          );
 
-        /*
-         * --------------------------------------
-         * ERROR LOGGING
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           ERROR LOGGING
+        ------------------------------------ */
 
-        if (salesError) {
+        if (recentSalesError) {
           console.error(
-            "Dashboard sales error:",
-            salesError
+            "Dashboard recent sales error:",
+            recentSalesError
           );
         }
 
-        if (productionError) {
+        if (
+          recentProductionError
+        ) {
           console.error(
-            "Dashboard production error:",
-            productionError
+            "Dashboard recent production error:",
+            recentProductionError
+          );
+        }
+
+        if (
+          monthlyProductionError
+        ) {
+          console.error(
+            "Dashboard monthly production error:",
+            monthlyProductionError
           );
         }
 
@@ -410,7 +564,7 @@ export default function DashboardPage() {
 
         if (alertsError) {
           console.error(
-            "Dashboard stock alerts error:",
+            "Dashboard alerts error:",
             alertsError
           );
         }
@@ -422,6 +576,13 @@ export default function DashboardPage() {
           );
         }
 
+        if (monthlySalesError) {
+          console.error(
+            "Dashboard monthly sales error:",
+            monthlySalesError
+          );
+        }
+
         if (expensesError) {
           console.error(
             "Dashboard expenses error:",
@@ -429,33 +590,43 @@ export default function DashboardPage() {
           );
         }
 
-        /*
-         * --------------------------------------
-         * NORMALIZE
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           NORMALIZE DATA
+        ------------------------------------ */
 
         const saleRows =
           (allSales || []) as Sale[];
 
+        const monthlySaleRows =
+          (
+            monthlySalesData || []
+          ) as Sale[];
+
         const inventoryRows =
-          (inventory || []) as InventoryItem[];
+          (
+            inventory || []
+          ) as InventoryItem[];
 
         const alertRows =
-          (alerts || []) as StockAlert[];
+          (
+            alerts || []
+          ) as StockAlert[];
 
         const expenseRows =
-          (expenses || []) as Expense[];
+          (
+            expenses || []
+          ) as Expense[];
 
-        /*
-         * --------------------------------------
-         * TOTAL REVENUE
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           TOTAL SALES
+        ------------------------------------ */
 
         const totalSales =
           saleRows.reduce(
-            (sum, sale) =>
+            (
+              sum,
+              sale
+            ) =>
               sum +
               Number(
                 sale.total_amount || 0
@@ -463,21 +634,16 @@ export default function DashboardPage() {
             0
           );
 
-        /*
-         * --------------------------------------
-         * COGS
-         * --------------------------------------
-         *
-         * Use the COGS recorded on each sale.
-         *
-         * If COGS is zero, it remains zero.
-         * This prevents the dashboard from
-         * inventing a production cost.
-         */
+        /* ------------------------------------
+           COGS
+        ------------------------------------ */
 
         const calculatedCogs =
           saleRows.reduce(
-            (sum, sale) =>
+            (
+              sum,
+              sale
+            ) =>
               sum +
               Math.max(
                 0,
@@ -488,37 +654,33 @@ export default function DashboardPage() {
             0
           );
 
-        /*
-         * --------------------------------------
-         * GROSS PROFIT
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           GROSS PROFIT
+        ------------------------------------ */
 
         const calculatedGrossProfit =
           totalSales -
           calculatedCogs;
 
-        /*
-         * --------------------------------------
-         * GROSS MARGIN
-         * --------------------------------------
-         */
-
         const calculatedGrossMargin =
           totalSales > 0
-            ? (calculatedGrossProfit /
-                totalSales) *
+            ? (
+                calculatedGrossProfit /
+                totalSales
+              ) *
               100
             : 0;
 
-        /*
-         * --------------------------------------
-         * RECENT PRODUCTION TOTAL
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           PRODUCTION TOTAL
+
+           Latest 5 records only.
+        ------------------------------------ */
 
         const totalProduction =
-          (production || []).reduce(
+          (
+            recentProductionData || []
+          ).reduce(
             (
               sum,
               item
@@ -530,20 +692,21 @@ export default function DashboardPage() {
             0
           );
 
-        /*
-         * --------------------------------------
-         * LOW STOCK
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           LOW STOCK
+        ------------------------------------ */
 
         const alertItems:
-          DashboardLowStockItem[] = [];
+          DashboardLowStockItem[] =
+          [];
 
         alertRows.forEach(
           (alert) => {
             const item =
               inventoryRows.find(
-                (inventoryItem) =>
+                (
+                  inventoryItem
+                ) =>
                   inventoryItem.item_name ===
                   alert.item_name
               );
@@ -559,24 +722,25 @@ export default function DashboardPage() {
                 )
             ) {
               alertItems.push({
-                name: item.item_name,
-                quantity: Number(
-                  item.quantity || 0
-                ),
+                name:
+                  item.item_name,
+                quantity:
+                  Number(
+                    item.quantity || 0
+                  ),
               });
             }
           }
         );
 
-        /*
-         * --------------------------------------
-         * RECEIVABLE PAYMENT LEDGER
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           PAYMENTS
+        ------------------------------------ */
 
         const saleIds =
           saleRows.map(
-            (sale) => sale.id
+            (sale) =>
+              sale.id
           );
 
         let paymentRows:
@@ -608,16 +772,15 @@ export default function DashboardPage() {
             );
           } else {
             paymentRows =
-              (payments ||
-                []) as Payment[];
+              (
+                payments || []
+              ) as Payment[];
           }
         }
 
-        /*
-         * --------------------------------------
-         * PAYMENTS BY SALE
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           PAYMENTS BY SALE
+        ------------------------------------ */
 
         const paymentsBySale =
           new Map<
@@ -642,11 +805,9 @@ export default function DashboardPage() {
           }
         );
 
-        /*
-         * --------------------------------------
-         * RECEIVABLE CALCULATIONS
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           RECEIVABLES
+        ------------------------------------ */
 
         let collected = 0;
         let outstanding = 0;
@@ -657,9 +818,6 @@ export default function DashboardPage() {
 
         const owingCustomers =
           new Set<string>();
-
-        const now =
-          new Date();
 
         saleRows.forEach(
           (sale) => {
@@ -676,8 +834,7 @@ export default function DashboardPage() {
                     sale.id
                   ) || 0
                 : Number(
-                    sale.amount_paid ||
-                      0
+                    sale.amount_paid || 0
                   );
 
             const balance =
@@ -720,10 +877,12 @@ export default function DashboardPage() {
                 0,
                 Math.floor(
                   ageMs /
-                    (1000 *
+                    (
+                      1000 *
                       60 *
                       60 *
-                      24)
+                      24
+                    )
                 )
               );
 
@@ -749,27 +908,22 @@ export default function DashboardPage() {
           }
         );
 
-        /*
-         * --------------------------------------
-         * EXPENSES
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           EXPENSES
+        ------------------------------------ */
 
         const expenseTotal =
           expenseRows.reduce(
-            (sum, expense) =>
+            (
+              sum,
+              expense
+            ) =>
               sum +
               Number(
                 expense.amount || 0
               ),
             0
           );
-
-        /*
-         * --------------------------------------
-         * EXPENSE CATEGORIES
-         * --------------------------------------
-         */
 
         const categories =
           new Map<
@@ -785,9 +939,11 @@ export default function DashboardPage() {
 
             categories.set(
               category,
-              (categories.get(
-                category
-              ) || 0) +
+              (
+                categories.get(
+                  category
+                ) || 0
+              ) +
                 Number(
                   expense.amount || 0
                 )
@@ -814,41 +970,21 @@ export default function DashboardPage() {
                 a.amount
             );
 
-        /*
-         * --------------------------------------
-         * NET CASH FLOW
-         * --------------------------------------
-         *
-         * Cash accounting:
-         *
-         * Collections - Expenses
-         */
+        /* ------------------------------------
+           CASH FLOW AND PROFIT
+        ------------------------------------ */
 
         const calculatedNetCashFlow =
           collected -
           expenseTotal;
 
-        /*
-         * --------------------------------------
-         * NET PROFIT
-         * --------------------------------------
-         *
-         * Accrual-style operating result:
-         *
-         * Revenue
-         * - COGS
-         * - Expenses
-         */
-
         const calculatedNetProfit =
           calculatedGrossProfit -
           expenseTotal;
 
-        /*
-         * --------------------------------------
-         * INVENTORY VALUES
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           INVENTORY VALUES
+        ------------------------------------ */
 
         let rawValue = 0;
         let finishedValue = 0;
@@ -890,33 +1026,27 @@ export default function DashboardPage() {
             ) {
               finishedValue +=
                 value;
+
               finishedCount +=
                 1;
             } else {
               rawValue +=
                 value;
+
               rawCount +=
                 1;
             }
           }
         );
 
-        /*
-         * --------------------------------------
-         * FINISHED GOODS COST ALERT
-         * --------------------------------------
-         *
-         * Inventory rows for block products
-         * with zero cost are considered
-         * uncosted.
-         */
-
         const blockInventory =
           inventoryRows.filter(
             (item) =>
               item.item_name
                 ?.toLowerCase()
-                .includes("block")
+                .includes(
+                  "block"
+                )
           );
 
         const uncosted =
@@ -930,11 +1060,9 @@ export default function DashboardPage() {
               ) <= 0
           ).length;
 
-        /*
-         * --------------------------------------
-         * UPDATE STATE
-         * --------------------------------------
-         */
+        /* ------------------------------------
+           UPDATE STATE
+        ------------------------------------ */
 
         if (!mounted) {
           return;
@@ -961,13 +1089,25 @@ export default function DashboardPage() {
         );
 
         setRecentSales(
-          (sales ||
-            []) as DashboardRecentSale[]
+          (
+            recentSalesData || []
+          ) as DashboardRecentSale[]
         );
 
         setRecentProduction(
-          (production ||
-            []) as DashboardProductionRecord[]
+          (
+            recentProductionData || []
+          ) as DashboardProductionRecord[]
+        );
+
+        setMonthlySales(
+          monthlySaleRows
+        );
+
+        setMonthlyProduction(
+          (
+            monthlyProductionData || []
+          ) as MonthlyProductionRecord[]
         );
 
         setTotalCollected(
@@ -1061,25 +1201,192 @@ export default function DashboardPage() {
       }
     }
 
-    loadDashboard();
+    void loadDashboard();
 
     return () => {
       mounted = false;
     };
   }, []);
 
-  /*
-   * ==========================================
-   * RENDER
-   * ==========================================
-   */
+  /* ========================================
+     BUILD 12-MONTH CHART DATA
+  ======================================== */
+
+  const monthlyChartData =
+    useMemo<
+      MonthlyChartData[]
+    >(
+      () => {
+        const months =
+          new Map<
+            string,
+            MonthlyChartData
+          >();
+
+        const today =
+          new Date();
+
+        for (
+          let index = 11;
+          index >= 0;
+          index--
+        ) {
+          const date =
+            new Date(
+              today.getFullYear(),
+              today.getMonth() -
+                index,
+              1
+            );
+
+          const key =
+            getMonthKey(
+              date
+            );
+
+          months.set(
+            key,
+            {
+              key,
+              month:
+                date.toLocaleDateString(
+                  "en-GH",
+                  {
+                    month: "short",
+                    year: "2-digit",
+                  }
+                ),
+              sales: 0,
+              production: 0,
+              profit: 0,
+              credit: 0,
+            }
+          );
+        }
+
+        monthlySales.forEach(
+          (sale) => {
+            if (
+              !sale.created_at
+            ) {
+              return;
+            }
+
+            const date =
+              new Date(
+                sale.created_at
+              );
+
+            if (
+              Number.isNaN(
+                date.getTime()
+              )
+            ) {
+              return;
+            }
+
+            const key =
+              getMonthKey(
+                date
+              );
+
+            const month =
+              months.get(
+                key
+              );
+
+            if (!month) {
+              return;
+            }
+
+            month.sales +=
+              Number(
+                sale.total_amount || 0
+              );
+
+            month.profit +=
+              Number(
+                sale.gross_profit || 0
+              );
+
+            month.credit +=
+              Math.max(
+                0,
+                Number(
+                  sale.balance_due || 0
+                )
+              );
+          }
+        );
+
+        monthlyProduction.forEach(
+          (record) => {
+            if (
+              !record.created_at
+            ) {
+              return;
+            }
+
+            const date =
+              new Date(
+                record.created_at
+              );
+
+            if (
+              Number.isNaN(
+                date.getTime()
+              )
+            ) {
+              return;
+            }
+
+            const key =
+              getMonthKey(
+                date
+              );
+
+            const month =
+              months.get(
+                key
+              );
+
+            if (!month) {
+              return;
+            }
+
+            month.production +=
+              Number(
+                record.quantity || 0
+              );
+          }
+        );
+
+        return Array.from(
+          months.values()
+        );
+      },
+      [
+        monthlySales,
+        monthlyProduction,
+      ]
+    );
+
+  if (loading) {
+    return (
+      <main className="space-y-8 p-6">
+        <div className="rounded-lg border bg-white p-8 text-center">
+          <p className="text-sm text-gray-500">
+            Loading dashboard...
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="space-y-8 p-6">
 
-      {/* =====================================
-          HEADER
-          ===================================== */}
+      {/* HEADER */}
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 
@@ -1090,8 +1397,9 @@ export default function DashboardPage() {
 
           <p className="mt-1 text-gray-600">
             Management overview of sales,
-            production, inventory, receivables,
-            expenses, and profitability.
+            production, inventory,
+            receivables, expenses,
+            and profitability.
           </p>
         </div>
 
@@ -1099,14 +1407,14 @@ export default function DashboardPage() {
 
           <Link
             href="/financials/profit-loss"
-            className="w-fit rounded-lg border bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+            className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
           >
             Profit & Loss
           </Link>
 
           <Link
             href="/receivables/aging"
-            className="w-fit rounded-lg bg-black px-4 py-2 text-white hover:bg-gray-800"
+            className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
           >
             Receivables Aging
           </Link>
@@ -1115,301 +1423,384 @@ export default function DashboardPage() {
 
       </div>
 
-      {/* =====================================
-          OPERATIONAL STATS
-          ===================================== */}
+      {/* OPERATIONAL STATS */}
 
       <DashboardStats
-        salesTotal={
-          salesTotal
-        }
-        productionTotal={
-          productionTotal
-        }
-        productCount={
-          productCount
-        }
-        lowStockCount={
-          lowStockCount
-        }
+        salesTotal={salesTotal}
+        productionTotal={productionTotal}
+        productCount={productCount}
+        lowStockCount={lowStockCount}
       />
 
-      {/* =====================================
-          MANAGEMENT FINANCIAL CENTER
-          ===================================== */}
+      {/* FINANCIAL CENTER */}
 
       <section className="space-y-4">
 
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">
+            Financial Management Center
+          </h2>
 
-          <div>
-            <h2 className="text-2xl font-bold">
-              Financial Management Center
-            </h2>
-
-            <p className="text-sm text-gray-500">
-              Revenue, cost of sales,
-              profitability, cash collection,
-              and operating expenses.
-            </p>
-          </div>
-
-          <Link
-            href="/financials/profit-loss"
-            className="text-sm font-semibold text-blue-600 hover:underline"
-          >
-            View Full Profit & Loss →
-          </Link>
-
+          <p className="text-sm text-gray-500">
+            Revenue, production cost,
+            profitability, collections,
+            and operating expenses.
+          </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
-          {/* REVENUE */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
               Revenue
             </p>
 
             <p className="mt-2 text-2xl font-bold">
-              {money(
-                salesTotal
-              )}
+              {money(salesTotal)}
             </p>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Total recorded sales
-            </p>
-
           </div>
 
-          {/* COGS */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
               Cost of Goods Sold
             </p>
 
-            <p className="mt-2 text-2xl font-bold text-orange-600">
-              {money(
-                totalCogs
-              )}
+            <p className="mt-2 text-2xl font-bold">
+              {money(totalCogs)}
             </p>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Recorded production cost of sold blocks
-            </p>
-
           </div>
 
-          {/* GROSS PROFIT */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
               Gross Profit
             </p>
 
-            <p
-              className={`mt-2 text-2xl font-bold ${
-                grossProfit >= 0
-                  ? "text-green-600"
-                  : "text-red-600"
-              }`}
-            >
-              {money(
-                grossProfit
-              )}
+            <p className="mt-2 text-2xl font-bold">
+              {money(grossProfit)}
             </p>
 
             <p className="mt-1 text-xs text-gray-500">
-              Margin:{" "}
-              {percent(
-                grossMargin
-              )}
+              Margin: {percent(grossMargin)}
             </p>
-
           </div>
 
-          {/* NET PROFIT */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
               Net Profit
             </p>
 
-            <p
-              className={`mt-2 text-2xl font-bold ${
-                netProfit >= 0
-                  ? "text-green-600"
-                  : "text-red-600"
-              }`}
-            >
-              {money(
-                netProfit
-              )}
+            <p className="mt-2 text-2xl font-bold">
+              {money(netProfit)}
             </p>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Gross profit minus expenses
-            </p>
-
           </div>
 
         </div>
 
-        {/* SECOND FINANCIAL ROW */}
-
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
-          {/* COLLECTED */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
               Cash Collected
             </p>
 
-            <p className="mt-2 text-2xl font-bold text-green-600">
-              {money(
-                totalCollected
-              )}
+            <p className="mt-2 text-2xl font-bold">
+              {money(totalCollected)}
             </p>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Actual customer payments
-            </p>
-
           </div>
 
-          {/* RECEIVABLES */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
-              Receivables
+              Outstanding Credit
             </p>
 
-            <p className="mt-2 text-2xl font-bold text-red-600">
+            <p className="mt-2 text-2xl font-bold">
               {money(
                 outstandingReceivables
               )}
             </p>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Money customers still owe
-            </p>
-
           </div>
 
-          {/* EXPENSES */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
-              Operating Expenses
+              Expenses
             </p>
 
-            <p className="mt-2 text-2xl font-bold text-red-600">
-              {money(
-                totalExpenses
-              )}
+            <p className="mt-2 text-2xl font-bold">
+              {money(totalExpenses)}
             </p>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Recorded business expenses
-            </p>
-
           </div>
 
-          {/* CASH FLOW */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
               Net Cash Flow
             </p>
 
-            <p
-              className={`mt-2 text-2xl font-bold ${
-                netCashFlow >= 0
-                  ? "text-green-600"
-                  : "text-red-600"
-              }`}
-            >
-              {money(
-                netCashFlow
-              )}
+            <p className="mt-2 text-2xl font-bold">
+              {money(netCashFlow)}
             </p>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Cash collected minus expenses
-            </p>
-
           </div>
 
         </div>
 
-        {/* PROFITABILITY EXPLANATION */}
+      </section>
 
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-5">
+      {/* MONTHLY CHARTS */}
 
-          <h3 className="font-semibold text-blue-900">
-            Profitability Summary
-          </h3>
+      <section className="space-y-6">
 
-          <div className="mt-4 grid gap-4 md:grid-cols-4">
+        <div>
+          <h2 className="text-2xl font-bold">
+            Monthly Business Performance
+          </h2>
 
-            <div>
-              <p className="text-xs text-blue-700">
-                Revenue
-              </p>
+          <p className="text-sm text-gray-500">
+            Sales, production, profit,
+            and outstanding credit for
+            the last 12 months.
+          </p>
+        </div>
 
-              <p className="mt-1 font-bold text-blue-950">
-                {money(
-                  salesTotal
-                )}
-              </p>
+        <div className="grid gap-6 xl:grid-cols-2">
+
+          {/* SALES CHART */}
+
+          <div className="rounded-xl border bg-white p-5 shadow-sm">
+
+            <h3 className="text-lg font-semibold">
+              Monthly Sales
+            </h3>
+
+            <p className="mb-4 text-sm text-gray-500">
+              Revenue generated each month.
+            </p>
+
+            <div className="h-[320px]">
+
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+
+                <BarChart
+                  data={monthlyChartData}
+                >
+
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                  />
+
+                  <XAxis
+                    dataKey="month"
+                  />
+
+                  <YAxis />
+
+                  <Tooltip
+                    formatter={(
+                      value
+                    ) =>
+                      money(
+                        Number(value)
+                      )
+                    }
+                  />
+
+                  <Legend />
+
+                  <Bar
+                    dataKey="sales"
+                    name="Sales"
+                  />
+
+                </BarChart>
+
+              </ResponsiveContainer>
+
             </div>
 
-            <div>
-              <p className="text-xs text-blue-700">
-                COGS
-              </p>
+          </div>
 
-              <p className="mt-1 font-bold text-blue-950">
-                {money(
-                  totalCogs
-                )}
-              </p>
+          {/* PROFIT CHART */}
+
+          <div className="rounded-xl border bg-white p-5 shadow-sm">
+
+            <h3 className="text-lg font-semibold">
+              Monthly Gross Profit
+            </h3>
+
+            <p className="mb-4 text-sm text-gray-500">
+              Gross profit generated from sales.
+            </p>
+
+            <div className="h-[320px]">
+
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+
+                <LineChart
+                  data={monthlyChartData}
+                >
+
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                  />
+
+                  <XAxis
+                    dataKey="month"
+                  />
+
+                  <YAxis />
+
+                  <Tooltip
+                    formatter={(
+                      value
+                    ) =>
+                      money(
+                        Number(value)
+                      )
+                    }
+                  />
+
+                  <Legend />
+
+                  <Line
+                    type="monotone"
+                    dataKey="profit"
+                    name="Gross Profit"
+                    strokeWidth={3}
+                    dot={{
+                      r: 4,
+                    }}
+                  />
+
+                </LineChart>
+
+              </ResponsiveContainer>
+
             </div>
 
-            <div>
-              <p className="text-xs text-blue-700">
-                Gross Profit
-              </p>
+          </div>
 
-              <p className="mt-1 font-bold text-blue-950">
-                {money(
-                  grossProfit
-                )}
-              </p>
+          {/* PRODUCTION CHART */}
+
+          <div className="rounded-xl border bg-white p-5 shadow-sm">
+
+            <h3 className="text-lg font-semibold">
+              Monthly Production
+            </h3>
+
+            <p className="mb-4 text-sm text-gray-500">
+              Total blocks produced each month.
+            </p>
+
+            <div className="h-[320px]">
+
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+
+                <BarChart
+                  data={monthlyChartData}
+                >
+
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                  />
+
+                  <XAxis
+                    dataKey="month"
+                  />
+
+                  <YAxis />
+
+                  <Tooltip
+                    formatter={(
+                      value
+                    ) =>
+                      number(
+                        Number(value)
+                      )
+                    }
+                  />
+
+                  <Legend />
+
+                  <Bar
+                    dataKey="production"
+                    name="Blocks Produced"
+                  />
+
+                </BarChart>
+
+              </ResponsiveContainer>
+
             </div>
 
-            <div>
-              <p className="text-xs text-blue-700">
-                Net Profit
-              </p>
+          </div>
 
-              <p className="mt-1 font-bold text-blue-950">
-                {money(
-                  netProfit
-                )}
-              </p>
+          {/* CREDIT CHART */}
+
+          <div className="rounded-xl border bg-white p-5 shadow-sm">
+
+            <h3 className="text-lg font-semibold">
+              Monthly Outstanding Credit
+            </h3>
+
+            <p className="mb-4 text-sm text-gray-500">
+              Outstanding customer balances
+              recorded by month.
+            </p>
+
+            <div className="h-[320px]">
+
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+
+                <LineChart
+                  data={monthlyChartData}
+                >
+
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                  />
+
+                  <XAxis
+                    dataKey="month"
+                  />
+
+                  <YAxis />
+
+                  <Tooltip
+                    formatter={(
+                      value
+                    ) =>
+                      money(
+                        Number(value)
+                      )
+                    }
+                  />
+
+                  <Legend />
+
+                  <Line
+                    type="monotone"
+                    dataKey="credit"
+                    name="Outstanding Credit"
+                    strokeWidth={3}
+                    dot={{
+                      r: 4,
+                    }}
+                  />
+
+                </LineChart>
+
+              </ResponsiveContainer>
+
             </div>
 
           </div>
@@ -1418,236 +1809,122 @@ export default function DashboardPage() {
 
       </section>
 
-      {/* =====================================
-          INVENTORY CONTROL
-          ===================================== */}
+      {/* INVENTORY */}
 
       <section className="space-y-4">
 
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">
+            Inventory Control
+          </h2>
 
-          <div>
-            <h2 className="text-2xl font-bold">
-              Inventory Control
-            </h2>
-
-            <p className="text-sm text-gray-500">
-              Raw materials, finished goods,
-              stock value, and costing alerts.
-            </p>
-          </div>
-
-          <Link
-            href="/inventory"
-            className="text-sm font-semibold text-blue-600 hover:underline"
-          >
-            View Inventory →
-          </Link>
-
+          <p className="text-sm text-gray-500">
+            Raw materials, finished goods,
+            stock value, and costing.
+          </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
-          {/* RAW MATERIAL VALUE */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
               Raw Material Value
             </p>
 
             <p className="mt-2 text-2xl font-bold">
-              {money(
-                rawMaterialValue
-              )}
+              {money(rawMaterialValue)}
             </p>
 
-            <p className="mt-1 text-xs text-gray-500">
-              {rawMaterialItems} inventory item
-              {rawMaterialItems === 1
-                ? ""
-                : "s"}
+            <p className="text-xs text-gray-500">
+              {rawMaterialItems} items
             </p>
-
           </div>
 
-          {/* FINISHED GOODS VALUE */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
               Finished Goods Value
             </p>
 
             <p className="mt-2 text-2xl font-bold">
-              {money(
-                finishedGoodsValue
-              )}
+              {money(finishedGoodsValue)}
             </p>
 
-            <p className="mt-1 text-xs text-gray-500">
-              {finishedGoodsItems} finished-goods
-              item
-              {finishedGoodsItems === 1
-                ? ""
-                : "s"}
+            <p className="text-xs text-gray-500">
+              {finishedGoodsItems} items
             </p>
-
           </div>
 
-          {/* LOW STOCK */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
               Low Stock Alerts
             </p>
 
-            <p
-              className={`mt-2 text-2xl font-bold ${
-                lowStockCount > 0
-                  ? "text-red-600"
-                  : "text-green-600"
-              }`}
-            >
-              {number(
-                lowStockCount
-              )}
+            <p className="mt-2 text-2xl font-bold">
+              {number(lowStockCount)}
             </p>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Items below minimum quantity
-            </p>
-
           </div>
 
-          {/* UNCOSTED */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
               Uncosted Finished Goods
             </p>
 
-            <p
-              className={`mt-2 text-2xl font-bold ${
-                uncostedFinishedGoods > 0
-                  ? "text-red-600"
-                  : "text-green-600"
-              }`}
-            >
+            <p className="mt-2 text-2xl font-bold">
               {number(
                 uncostedFinishedGoods
               )}
             </p>
-
-            <p className="mt-1 text-xs text-gray-500">
-              Block inventory without a unit cost
-            </p>
-
           </div>
 
         </div>
 
-        {/* COSTING WARNING */}
-
-        {uncostedFinishedGoods >
-          0 && (
-          <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-5">
-
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-
-              <div>
-
-                <p className="font-semibold text-yellow-900">
-                  Finished-goods costing requires attention
-                </p>
-
-                <p className="mt-1 text-sm text-yellow-800">
-                  Some block inventory has quantity
-                  but no production cost. This can
-                  cause COGS and profit reports to be
-                  incomplete.
-                </p>
-
-              </div>
-
-              <Link
-                href="/inventory"
-                className="w-fit rounded-lg bg-yellow-600 px-4 py-2 text-sm font-semibold text-white hover:bg-yellow-700"
-              >
-                Review Inventory
-              </Link>
-
-            </div>
-
-          </div>
-        )}
-
       </section>
 
-      {/* =====================================
-          EXPENSE BREAKDOWN
-          ===================================== */}
+      {/* EXPENSE BREAKDOWN */}
 
-      {expenseCategories.length >
-        0 && (
+      {expenseCategories.length > 0 && (
+
         <section className="space-y-4">
 
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">
+              Expense Breakdown
+            </h2>
 
-            <div>
-
-              <h2 className="text-2xl font-bold">
-                Expense Breakdown
-              </h2>
-
-              <p className="text-sm text-gray-500">
-                Where the factory's money is being
-                spent.
-              </p>
-
-            </div>
-
-            <Link
-              href="/expenses"
-              className="text-sm font-semibold text-blue-600 hover:underline"
-            >
-              View Expenses →
-            </Link>
-
+            <p className="text-sm text-gray-500">
+              {expenseCount} expense records
+              totaling{" "}
+              {money(totalExpenses)}.
+            </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 
             {expenseCategories.map(
               (item) => {
-
                 const percentage =
                   totalExpenses > 0
-                    ? (item.amount /
-                        totalExpenses) *
+                    ? (
+                        item.amount /
+                        totalExpenses
+                      ) *
                       100
                     : 0;
 
                 return (
                   <div
-                    key={
-                      item.category
-                    }
+                    key={item.category}
                     className="rounded-lg border bg-white p-5 shadow-sm"
                   >
 
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex justify-between gap-4">
 
                       <p className="font-semibold">
                         {item.category}
                       </p>
 
-                      <p className="whitespace-nowrap font-bold">
-                        {money(
-                          item.amount
-                        )}
+                      <p className="font-bold">
+                        {money(item.amount)}
                       </p>
 
                     </div>
@@ -1666,13 +1943,6 @@ export default function DashboardPage() {
 
                     </div>
 
-                    <p className="mt-2 text-xs text-gray-500">
-                      {percentage.toFixed(
-                        1
-                      )}
-                      % of total expenses
-                    </p>
-
                   </div>
                 );
               }
@@ -1680,286 +1950,121 @@ export default function DashboardPage() {
 
           </div>
 
-          <p className="text-sm text-gray-500">
-
-            {expenseCount} expense{" "}
-            {expenseCount === 1
-              ? "record"
-              : "records"}{" "}
-            totaling{" "}
-
-            <span className="font-semibold text-gray-900">
-              {money(
-                totalExpenses
-              )}
-            </span>
-            .
-
-          </p>
-
         </section>
       )}
 
-      {/* =====================================
-          ACCOUNTS RECEIVABLE
-          ===================================== */}
+      {/* RECEIVABLES */}
 
       <section className="space-y-4">
 
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">
+            Accounts Receivable
+          </h2>
 
-          <div>
-
-            <h2 className="text-2xl font-bold">
-              Accounts Receivable
-            </h2>
-
-            <p className="text-sm text-gray-500">
-              Money collected and customer balances.
-            </p>
-
-          </div>
-
-          <Link
-            href="/receivables"
-            className="text-sm font-semibold text-blue-600 hover:underline"
-          >
-            View Receivables →
-          </Link>
-
+          <p className="text-sm text-gray-500">
+            Customer balances and payment aging.
+          </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
-          {/* COLLECTED */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
               Total Collected
             </p>
 
-            <p className="mt-2 text-2xl font-bold text-green-600">
-              {money(
-                totalCollected
-              )}
+            <p className="mt-2 text-2xl font-bold">
+              {money(totalCollected)}
             </p>
-
           </div>
 
-          {/* OUTSTANDING */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
               Outstanding
             </p>
 
-            <p className="mt-2 text-2xl font-bold text-red-600">
+            <p className="mt-2 text-2xl font-bold">
               {money(
                 outstandingReceivables
               )}
             </p>
-
           </div>
 
-          {/* CUSTOMERS OWING */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
               Customers Owing
             </p>
 
             <p className="mt-2 text-2xl font-bold">
-              {number(
-                customersOwing
-              )}
+              {number(customersOwing)}
             </p>
-
           </div>
 
-          {/* CURRENT */}
-
           <div className="rounded-lg border bg-white p-5 shadow-sm">
-
             <p className="text-sm text-gray-500">
-              Current
+              Current (0–30 Days)
             </p>
 
             <p className="mt-2 text-2xl font-bold">
-              {money(
-                currentReceivables
-              )}
+              {money(currentReceivables)}
             </p>
-
-            <p className="mt-1 text-xs text-gray-500">
-              0–30 days
-            </p>
-
           </div>
 
         </div>
-
-        {/* AGING */}
 
         <div className="grid gap-4 md:grid-cols-3">
 
           <div className="rounded-lg border bg-white p-5 shadow-sm">
+            <p className="text-sm font-semibold">
+              31–60 Days
+            </p>
 
-            <div className="flex items-center justify-between">
-
-              <div>
-
-                <p className="text-sm font-semibold">
-                  31–60 Days
-                </p>
-
-                <p className="text-xs text-gray-500">
-                  Moderate aging
-                </p>
-
-              </div>
-
-              <p className="text-lg font-bold">
-                {money(
-                  days31to60
-                )}
-              </p>
-
-            </div>
-
+            <p className="mt-2 text-xl font-bold">
+              {money(days31to60)}
+            </p>
           </div>
 
           <div className="rounded-lg border bg-white p-5 shadow-sm">
+            <p className="text-sm font-semibold">
+              61–90 Days
+            </p>
 
-            <div className="flex items-center justify-between">
-
-              <div>
-
-                <p className="text-sm font-semibold">
-                  61–90 Days
-                </p>
-
-                <p className="text-xs text-gray-500">
-                  High aging
-                </p>
-
-              </div>
-
-              <p className="text-lg font-bold">
-                {money(
-                  days61to90
-                )}
-              </p>
-
-            </div>
-
+            <p className="mt-2 text-xl font-bold">
+              {money(days61to90)}
+            </p>
           </div>
 
           <div className="rounded-lg border bg-white p-5 shadow-sm">
+            <p className="text-sm font-semibold">
+              90+ Days
+            </p>
 
-            <div className="flex items-center justify-between">
-
-              <div>
-
-                <p className="text-sm font-semibold">
-                  90+ Days
-                </p>
-
-                <p className="text-xs text-gray-500">
-                  Severely overdue
-                </p>
-
-              </div>
-
-              <p className="text-lg font-bold text-red-600">
-                {money(
-                  days90Plus
-                )}
-              </p>
-
-            </div>
-
+            <p className="mt-2 text-xl font-bold">
+              {money(days90Plus)}
+            </p>
           </div>
 
         </div>
 
-        {/* RECEIVABLE ACTION */}
-
-        {outstandingReceivables >
-          0 && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-5">
-
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-
-              <div>
-
-                <p className="font-semibold text-red-800">
-                  Customer balances require attention
-                </p>
-
-                <p className="text-sm text-red-700">
-
-                  {customersOwing}{" "}
-                  customer
-                  {customersOwing ===
-                  1
-                    ? ""
-                    : "s"}{" "}
-                  currently owe{" "}
-
-                  {money(
-                    outstandingReceivables
-                  )}
-                  .
-
-                </p>
-
-              </div>
-
-              <Link
-                href="/receivables/aging"
-                className="w-fit rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-              >
-                Review Aging
-              </Link>
-
-            </div>
-
-          </div>
-        )}
-
       </section>
 
-      {/* =====================================
-          LOW STOCK
-          ===================================== */}
+      {/* LOW STOCK */}
 
       <LowStock
-        items={
-          lowStockItems
-        }
+        items={lowStockItems}
       />
 
-      {/* =====================================
-          RECENT SALES
-          ===================================== */}
+      {/* RECENT SALES */}
 
       <RecentSales
-        sales={
-          recentSales
-        }
+        sales={recentSales}
       />
 
-      {/* =====================================
-          PRODUCTION HISTORY
-          ===================================== */}
+      {/* LATEST 5 PRODUCTION RECORDS */}
 
       <ProductionHistory
-        records={
-          recentProduction
-        }
+        records={recentProduction}
       />
 
     </main>

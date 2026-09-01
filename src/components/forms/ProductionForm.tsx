@@ -1,36 +1,138 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createProduction } from "@/services/production";
 
-const PRODUCTS = [
-  "5-inch Solid Block",
-  "6-inch Solid Block",
-  "5-inch Hollow Block",
-  "6-inch Hollow Block",
-];
+type Recipe = {
+  targetYield: number;
+  cementPerBag: number;
+  quarryDustWheelbarrows: number;
+  chippingsWheelbarrows: number;
+  waterMin: number;
+  waterMax: number;
+};
+
+const WHEELBARROW_LITRES = 90;
+const LITRES_PER_M3 = 1000;
+
+const WHEELBARROW_TO_M3 =
+  WHEELBARROW_LITRES / LITRES_PER_M3;
+
+const RECIPES: Record<string, Recipe> = {
+  "5-inch Solid Block": {
+    targetYield: 60,
+    cementPerBag: 1,
+    quarryDustWheelbarrows: 6,
+    chippingsWheelbarrows: 2,
+    waterMin: 25,
+    waterMax: 30,
+  },
+
+  "5-inch Hollow Block": {
+    targetYield: 65,
+    cementPerBag: 1,
+    quarryDustWheelbarrows: 6,
+    chippingsWheelbarrows: 2,
+    waterMin: 25,
+    waterMax: 30,
+  },
+
+  "6-inch Solid Block": {
+    targetYield: 45,
+    cementPerBag: 1,
+    quarryDustWheelbarrows: 6,
+    chippingsWheelbarrows: 2,
+    waterMin: 25,
+    waterMax: 30,
+  },
+
+  "6-inch Hollow Block": {
+    targetYield: 55,
+    cementPerBag: 1,
+    quarryDustWheelbarrows: 6,
+    chippingsWheelbarrows: 2,
+    waterMin: 25,
+    waterMax: 30,
+  },
+};
+
+const PRODUCTS = Object.keys(RECIPES);
+
+const CEMENT_COST = 75;
 
 export default function ProductionForm() {
-  const [productName, setProductName] =
-    useState("");
+  const [productName, setProductName] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [cementUsed, setCementUsed] = useState("");
+  const [waterUsed, setWaterUsed] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const [quantity, setQuantity] =
-    useState("");
+  const recipe = useMemo(
+    () => RECIPES[productName],
+    [productName]
+  );
 
-  const [cementUsed, setCementUsed] =
-    useState("");
+  const quantityNumber = Number(quantity);
 
-  const [chippingsUsed, setChippingsUsed] =
-    useState("");
+  const standardBags =
+    recipe &&
+    Number.isFinite(quantityNumber) &&
+    quantityNumber > 0
+      ? quantityNumber / recipe.targetYield
+      : 0;
 
-  const [quarryDustUsed, setQuarryDustUsed] =
-    useState("");
+  const standardQuarryDustWheelbarrows =
+    recipe
+      ? standardBags *
+        recipe.quarryDustWheelbarrows
+      : 0;
 
-  const [waterUsed, setWaterUsed] =
-    useState("");
+  const standardChippingsWheelbarrows =
+    recipe
+      ? standardBags *
+        recipe.chippingsWheelbarrows
+      : 0;
 
-  const [saving, setSaving] =
-    useState(false);
+  const standardQuarryDustM3 =
+    standardQuarryDustWheelbarrows *
+    WHEELBARROW_TO_M3;
+
+  const standardChippingsM3 =
+    standardChippingsWheelbarrows *
+    WHEELBARROW_TO_M3;
+
+  const standardWater =
+    recipe
+      ? standardBags *
+        ((recipe.waterMin +
+          recipe.waterMax) /
+          2)
+      : 0;
+
+  function handleProductChange(
+    value: string
+  ) {
+    setProductName(value);
+    setCementUsed("");
+    setWaterUsed("");
+  }
+
+  function applyStandardRecipe() {
+    if (!recipe || standardBags <= 0) {
+      alert(
+        "Enter the quantity produced first."
+      );
+      return;
+    }
+
+    setCementUsed(
+      standardBags.toFixed(2)
+    );
+
+    setWaterUsed(
+      standardWater.toFixed(2)
+    );
+  }
 
   async function handleSubmit(
     e: React.FormEvent<HTMLFormElement>
@@ -42,20 +144,9 @@ export default function ProductionForm() {
       return;
     }
 
-    const quantityNumber =
-      Number(quantity);
-
-    const cementNumber =
-      Number(cementUsed);
-
-    const chippingsNumber =
-      Number(chippingsUsed);
-
-    const quarryDustNumber =
-      Number(quarryDustUsed);
-
-    const waterNumber =
-      Number(waterUsed);
+    const quantityNumber = Number(quantity);
+    const cementNumber = Number(cementUsed);
+    const waterNumber = Number(waterUsed);
 
     if (
       !Number.isInteger(quantityNumber) ||
@@ -69,43 +160,44 @@ export default function ProductionForm() {
 
     if (
       !Number.isFinite(cementNumber) ||
-      cementNumber < 0
+      cementNumber <= 0
     ) {
       alert(
-        "Please enter a valid cement quantity."
-      );
-      return;
-    }
-
-    if (
-      !Number.isFinite(chippingsNumber) ||
-      chippingsNumber < 0
-    ) {
-      alert(
-        "Please enter a valid chippings quantity."
-      );
-      return;
-    }
-
-    if (
-      !Number.isFinite(quarryDustNumber) ||
-      quarryDustNumber < 0
-    ) {
-      alert(
-        "Please enter a valid quarry dust quantity."
+        "Please enter the cement quantity used."
       );
       return;
     }
 
     if (
       !Number.isFinite(waterNumber) ||
-      waterNumber < 0
+      waterNumber <= 0
     ) {
       alert(
-        "Please enter a valid water quantity."
+        "Please enter the water quantity used."
       );
       return;
     }
+
+    if (!recipe || standardBags <= 0) {
+      alert(
+        "Unable to calculate the production recipe."
+      );
+      return;
+    }
+
+    /*
+     * The UI uses wheelbarrows.
+     *
+     * The database continues to receive
+     * aggregate consumption in cubic metres.
+     *
+     * 1 wheelbarrow = 90 L = 0.09 m³.
+     */
+    const chippingsM3 =
+      standardChippingsM3;
+
+    const quarryDustM3 =
+      standardQuarryDustM3;
 
     setSaving(true);
 
@@ -122,10 +214,10 @@ export default function ProductionForm() {
             cementNumber,
 
           chippings_used:
-            chippingsNumber,
+            chippingsM3,
 
           quarry_dust_used:
-            quarryDustNumber,
+            quarryDustM3,
 
           water_used:
             waterNumber,
@@ -148,8 +240,6 @@ export default function ProductionForm() {
       setProductName("");
       setQuantity("");
       setCementUsed("");
-      setChippingsUsed("");
-      setQuarryDustUsed("");
       setWaterUsed("");
     } catch (error) {
       console.error(
@@ -172,7 +262,8 @@ export default function ProductionForm() {
       onSubmit={handleSubmit}
       className="space-y-5 rounded-lg bg-white p-6 shadow"
     >
-      {/* Product */}
+      {/* PRODUCT */}
+
       <div>
         <label
           htmlFor="productName"
@@ -185,7 +276,9 @@ export default function ProductionForm() {
           id="productName"
           value={productName}
           onChange={(e) =>
-            setProductName(e.target.value)
+            handleProductChange(
+              e.target.value
+            )
           }
           className="w-full rounded border p-3"
           disabled={saving}
@@ -206,7 +299,72 @@ export default function ProductionForm() {
         </select>
       </div>
 
-      {/* Quantity */}
+      {/* STANDARD RECIPE */}
+
+      {recipe && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <h3 className="font-semibold text-blue-900">
+            Standard Production Recipe
+          </h3>
+
+          <p className="mt-1 text-sm text-blue-800">
+            Target yield:{" "}
+            <strong>
+              {recipe.targetYield}
+            </strong>{" "}
+            blocks per bag of cement
+          </p>
+
+          <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
+            <div>
+              Cement:{" "}
+              <strong>
+                1 bag
+              </strong>
+            </div>
+
+            <div>
+              Quarry Dust:{" "}
+              <strong>
+                6 wheelbarrows
+              </strong>
+            </div>
+
+            <div>
+              Chippings:{" "}
+              <strong>
+                2 wheelbarrows
+              </strong>
+            </div>
+
+            <div>
+              Water:{" "}
+              <strong>
+                25–30 L
+              </strong>
+            </div>
+          </div>
+
+          <div className="mt-3 text-xs text-blue-700">
+            1 wheelbarrow ={" "}
+            {WHEELBARROW_LITRES} L
+            {" = "}
+            {WHEELBARROW_TO_M3.toFixed(2)}
+            {" m³"}
+          </div>
+
+          <div className="mt-1 text-xs text-blue-700">
+            Cement standard cost:
+            {" "}
+            GH₵{CEMENT_COST.toFixed(2)}
+            {" "}
+            per bag.
+          </div>
+        </div>
+      )}
+
+      {/* QUANTITY */}
+
       <div>
         <label
           htmlFor="quantity"
@@ -225,13 +383,87 @@ export default function ProductionForm() {
             setQuantity(e.target.value)
           }
           className="w-full rounded border p-3"
-          placeholder="Enter quantity"
+          placeholder="Enter actual blocks produced"
           disabled={saving}
           required
         />
       </div>
 
-      {/* Cement */}
+      {/* STANDARD CALCULATION */}
+
+      {recipe &&
+        standardBags > 0 && (
+          <div className="rounded-lg border bg-gray-50 p-4">
+            <p className="text-sm font-semibold">
+              Standard requirement for{" "}
+              {quantity} blocks
+            </p>
+
+            <div className="mt-2 space-y-1 text-sm text-gray-600">
+              <p>
+                Cement:{" "}
+                <strong>
+                  {standardBags.toFixed(2)} bags
+                </strong>
+              </p>
+
+              <p>
+                Quarry Dust:{" "}
+                <strong>
+                  {standardQuarryDustWheelbarrows.toFixed(
+                    2
+                  )}{" "}
+                  wheelbarrows
+                </strong>
+              </p>
+
+              <p className="text-xs text-gray-500">
+                Inventory deduction:{" "}
+                {standardQuarryDustM3.toFixed(
+                  3
+                )}{" "}
+                m³
+              </p>
+
+              <p>
+                Chippings:{" "}
+                <strong>
+                  {standardChippingsWheelbarrows.toFixed(
+                    2
+                  )}{" "}
+                  wheelbarrows
+                </strong>
+              </p>
+
+              <p className="text-xs text-gray-500">
+                Inventory deduction:{" "}
+                {standardChippingsM3.toFixed(
+                  3
+                )}{" "}
+                m³
+              </p>
+
+              <p>
+                Water target:{" "}
+                <strong>
+                  {standardWater.toFixed(2)} L
+                </strong>
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={applyStandardRecipe}
+              disabled={saving}
+              className="mt-3 rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
+            >
+              Apply Standard Recipe
+            </button>
+          </div>
+        )}
+
+      {/* CEMENT */}
+
       <div>
         <label
           htmlFor="cementUsed"
@@ -253,7 +485,7 @@ export default function ProductionForm() {
               )
             }
             className="w-full rounded border p-3 pr-16"
-            placeholder="Enter cement used"
+            placeholder="Actual cement used"
             disabled={saving}
             required
           />
@@ -264,85 +496,12 @@ export default function ProductionForm() {
         </div>
 
         <p className="mt-1 text-xs text-gray-500">
-          GH₵75 per bag
+          GH₵75.00 per bag
         </p>
       </div>
 
-      {/* Chippings */}
-      <div>
-        <label
-          htmlFor="chippingsUsed"
-          className="mb-2 block font-medium"
-        >
-          Chippings Used
-        </label>
+      {/* WATER */}
 
-        <div className="relative">
-          <input
-            id="chippingsUsed"
-            type="number"
-            min="0"
-            step="0.01"
-            value={chippingsUsed}
-            onChange={(e) =>
-              setChippingsUsed(
-                e.target.value
-              )
-            }
-            className="w-full rounded border p-3 pr-16"
-            placeholder="Enter chippings used"
-            disabled={saving}
-            required
-          />
-
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
-            m³
-          </span>
-        </div>
-
-        <p className="mt-1 text-xs text-gray-500">
-          GH₵235 per m³
-        </p>
-      </div>
-
-      {/* Quarry Dust */}
-      <div>
-        <label
-          htmlFor="quarryDustUsed"
-          className="mb-2 block font-medium"
-        >
-          Quarry Dust Used
-        </label>
-
-        <div className="relative">
-          <input
-            id="quarryDustUsed"
-            type="number"
-            min="0"
-            step="0.01"
-            value={quarryDustUsed}
-            onChange={(e) =>
-              setQuarryDustUsed(
-                e.target.value
-              )
-            }
-            className="w-full rounded border p-3 pr-16"
-            placeholder="Enter quarry dust used"
-            disabled={saving}
-            required
-          />
-
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
-            m³
-          </span>
-        </div>
-
-        <p className="mt-1 text-xs text-gray-500">
-          GH₵235 per m³
-        </p>
-      </div>
-
-      {/* Water */}
       <div>
         <label
           htmlFor="waterUsed"
@@ -364,7 +523,7 @@ export default function ProductionForm() {
               )
             }
             className="w-full rounded border p-3 pr-16"
-            placeholder="Enter water used"
+            placeholder="Actual water used"
             disabled={saving}
             required
           />
@@ -375,11 +534,12 @@ export default function ProductionForm() {
         </div>
 
         <p className="mt-1 text-xs text-gray-500">
-          GH₵0.50 per litre
+          Standard range: 25–30 L per bag.
         </p>
       </div>
 
-      {/* Submit */}
+      {/* SUBMIT */}
+
       <button
         type="submit"
         disabled={saving}

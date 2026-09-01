@@ -1,8 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import InventoryForm from "@/components/forms/InventoryForm";
+import Link from "next/link";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  CheckCircle2,
+  History,
+  Package,
+  Scale,
+  Search,
+  Warehouse,
+} from "lucide-react";
+
 import { supabase } from "@/lib/supabase/client";
+
+/* ========================================
+   TYPES
+======================================== */
 
 interface InventoryItem {
   id: string;
@@ -11,7 +32,6 @@ interface InventoryItem {
   unit: string;
   quantity: number;
   unit_cost: number;
-  created_at: string;
 }
 
 interface ProductionRecord {
@@ -21,10 +41,21 @@ interface ProductionRecord {
   created_at: string;
 }
 
-interface Sale {
+interface SaleRecord {
   id: string;
-  product_name: string;
+  product_name?: string;
   quantity: number;
+  created_at: string;
+}
+
+interface InventoryMovement {
+  id: string;
+  inventory_id: string;
+  item_name: string;
+  movement_type: string;
+  quantity: number;
+  reason: string | null;
+  created_by: string | null;
   created_at: string;
 }
 
@@ -37,713 +68,1164 @@ interface Reconciliation {
   status: "Balanced" | "Difference";
 }
 
-function number(value: number) {
-  return Number(value || 0);
+/* ========================================
+   NUMBER HELPER
+======================================== */
+
+function number(value: unknown): number {
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0;
 }
 
-function money(value: number) {
-  return `GH₵${number(value).toLocaleString("en-GH", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+/* ========================================
+   CURRENCY FORMATTER
+======================================== */
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat(
+    "en-GH",
+    {
+      style: "currency",
+      currency: "GHS",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  ).format(value);
 }
+
+/* ========================================
+   INVENTORY PAGE
+======================================== */
 
 export default function InventoryPage() {
-  const [inventory, setInventory] = useState<
-    InventoryItem[]
-  >([]);
+  /* ========================================
+     STATE
+  ======================================== */
 
-  const [production, setProduction] = useState<
-    ProductionRecord[]
-  >([]);
+  const [inventory, setInventory] =
+    useState<InventoryItem[]>([]);
 
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [production, setProduction] =
+    useState<ProductionRecord[]>([]);
 
-  const [loading, setLoading] = useState(true);
+  const [sales, setSales] =
+    useState<SaleRecord[]>([]);
 
-  const [errorMessage, setErrorMessage] =
+  const [movements, setMovements] =
+    useState<InventoryMovement[]>([]);
+
+  const [search, setSearch] =
     useState("");
 
-  const [search, setSearch] = useState("");
+  const [loading, setLoading] =
+    useState(true);
 
-  const [showLowStock, setShowLowStock] =
-    useState(false);
+  const [error, setError] =
+    useState<string | null>(null);
 
-  async function loadInventory() {
-    setLoading(true);
-    setErrorMessage("");
-
-    try {
-      const [
-        inventoryResult,
-        productionResult,
-        salesResult,
-      ] = await Promise.all([
-        supabase
-          .from("inventory")
-          .select("*")
-          .order("item_name", {
-            ascending: true,
-          }),
-
-        supabase
-          .from("production")
-          .select(
-            "id, product_name, quantity, created_at"
-          )
-          .order("created_at", {
-            ascending: false,
-          }),
-
-        supabase
-          .from("sales")
-          .select(
-            "id, product_name, quantity, created_at"
-          )
-          .order("created_at", {
-            ascending: false,
-          }),
-      ]);
-
-      if (inventoryResult.error) {
-        throw new Error(
-          `Inventory: ${inventoryResult.error.message}`
-        );
-      }
-
-      if (productionResult.error) {
-        throw new Error(
-          `Production: ${productionResult.error.message}`
-        );
-      }
-
-      if (salesResult.error) {
-        throw new Error(
-          `Sales: ${salesResult.error.message}`
-        );
-      }
-
-      setInventory(
-        (inventoryResult.data ||
-          []) as InventoryItem[]
-      );
-
-      setProduction(
-        (productionResult.data ||
-          []) as ProductionRecord[]
-      );
-
-      setSales(
-        (salesResult.data ||
-          []) as Sale[]
-      );
-    } catch (error) {
-      console.error(
-        "Inventory reconciliation error:",
-        error
-      );
-
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Failed to load inventory."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
+  /* ========================================
+     LOAD DATA
+  ======================================== */
 
   useEffect(() => {
-    loadInventory();
+    async function loadData() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [
+          inventoryResult,
+          productionResult,
+          salesResult,
+          movementsResult,
+        ] = await Promise.all([
+          /* INVENTORY */
+
+          supabase
+            .from("inventory")
+            .select(`
+              id,
+              item_name,
+              category,
+              unit,
+              quantity,
+              unit_cost
+            `)
+            .order(
+              "item_name",
+              {
+                ascending: true,
+              }
+            ),
+
+          /* PRODUCTION */
+
+          supabase
+            .from("production")
+            .select(`
+              id,
+              product_name,
+              quantity,
+              created_at
+            `)
+            .order(
+              "created_at",
+              {
+                ascending: false,
+              }
+            ),
+
+          /* SALES */
+
+          supabase
+            .from("sales")
+            .select(`
+              id,
+              product_name,
+              quantity,
+              created_at
+            `)
+            .order(
+              "created_at",
+              {
+                ascending: false,
+              }
+            ),
+
+          /* INVENTORY MOVEMENTS */
+
+          supabase
+            .from("inventory_movements")
+            .select(`
+              id,
+              inventory_id,
+              item_name,
+              movement_type,
+              quantity,
+              reason,
+              created_by,
+              created_at
+            `)
+            .order(
+              "created_at",
+              {
+                ascending: true,
+              }
+            ),
+        ]);
+
+        /* ====================================
+           INVENTORY ERROR
+        ==================================== */
+
+        if (inventoryResult.error) {
+          throw inventoryResult.error;
+        }
+
+        /* ====================================
+           PRODUCTION ERROR
+        ==================================== */
+
+        if (productionResult.error) {
+          console.error(
+            "Production loading error:",
+            productionResult.error
+          );
+        }
+
+        /* ====================================
+           SALES ERROR
+        ==================================== */
+
+        if (salesResult.error) {
+          console.error(
+            "Sales loading error:",
+            salesResult.error
+          );
+        }
+
+        /* ====================================
+           MOVEMENTS ERROR
+        ==================================== */
+
+        if (movementsResult.error) {
+          console.error(
+            "Inventory movements error:",
+            movementsResult.error
+          );
+        }
+
+        /* ====================================
+           SET INVENTORY
+        ==================================== */
+
+        setInventory(
+          (inventoryResult.data || []).map(
+            (item) => ({
+              id: item.id,
+              item_name:
+                item.item_name || "",
+              category:
+                item.category || "",
+              unit:
+                item.unit || "",
+              quantity:
+                number(item.quantity),
+              unit_cost:
+                number(item.unit_cost),
+            })
+          )
+        );
+
+        /* ====================================
+           SET PRODUCTION
+        ==================================== */
+
+        setProduction(
+          (productionResult.data ||
+            []).map((item) => ({
+            id: item.id,
+            product_name:
+              item.product_name || "",
+            quantity:
+              number(item.quantity),
+            created_at:
+              item.created_at,
+          }))
+        );
+
+        /* ====================================
+           SET SALES
+        ==================================== */
+
+        setSales(
+          (salesResult.data ||
+            []).map((item) => ({
+            id: item.id,
+            product_name:
+              item.product_name ||
+              "",
+            quantity:
+              number(item.quantity),
+            created_at:
+              item.created_at,
+          }))
+        );
+
+        /* ====================================
+           SET MOVEMENTS
+        ==================================== */
+
+        setMovements(
+          (movementsResult.data ||
+            []).map((movement) => ({
+            id: movement.id,
+            inventory_id:
+              movement.inventory_id,
+            item_name:
+              movement.item_name ||
+              "",
+            movement_type:
+              movement.movement_type ||
+              "",
+            quantity:
+              number(movement.quantity),
+            reason:
+              movement.reason ||
+              null,
+            created_by:
+              movement.created_by ||
+              null,
+            created_at:
+              movement.created_at,
+          }))
+        );
+      } catch (err) {
+        console.error(
+          "Inventory loading error:",
+          err
+        );
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load inventory."
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
   }, []);
 
-  /*
-   * Production totals by product.
-   */
-  const productionByProduct = useMemo(() => {
-    const map = new Map<
-      string,
-      number
-    >();
+  /* ========================================
+     PRODUCTION BY PRODUCT
+  ======================================== */
 
-    production.forEach((record) => {
-      const name =
-        record.product_name
-          ?.trim()
+  const productionByProduct =
+    useMemo(() => {
+      const map =
+        new Map<string, number>();
+
+      production.forEach(
+        (record) => {
+          const key =
+            record.product_name
+              ?.trim()
+              .toLowerCase();
+
+          if (!key) return;
+
+          const existing =
+            map.get(key) || 0;
+
+          map.set(
+            key,
+            existing +
+              number(
+                record.quantity
+              )
+          );
+        }
+      );
+
+      return map;
+    }, [production]);
+
+  /* ========================================
+     SALES BY PRODUCT
+  ======================================== */
+
+  const salesByProduct =
+    useMemo(() => {
+      const map =
+        new Map<string, number>();
+
+      sales.forEach(
+        (sale) => {
+          const key =
+            sale.product_name
+              ?.trim()
+              .toLowerCase();
+
+          if (!key) return;
+
+          const existing =
+            map.get(key) || 0;
+
+          map.set(
+            key,
+            existing +
+              number(
+                sale.quantity
+              )
+          );
+        }
+      );
+
+      return map;
+    }, [sales]);
+
+  /* ========================================
+     INVENTORY RECONCILIATION
+  ======================================== */
+
+  const reconciled =
+    useMemo(() => {
+      return inventory.map(
+        (item) => {
+          const key =
+            item.item_name
+              ?.trim()
+              .toLowerCase() ||
+            "";
+
+          const category =
+            item.category
+              ?.trim()
+              .toLowerCase() ||
+            "";
+
+          const currentQuantity =
+            number(item.quantity);
+
+          /* ==================================
+             FINISHED PRODUCTS
+
+             PRODUCED
+             - SOLD
+          ================================== */
+
+          if (
+            category ===
+              "finished product" ||
+            category ===
+              "finished goods" ||
+            category ===
+              "product"
+          ) {
+            const produced =
+              productionByProduct.get(
+                key
+              ) || 0;
+
+            const sold =
+              salesByProduct.get(
+                key
+              ) || 0;
+
+            const calculatedQuantity =
+              produced - sold;
+
+            const difference =
+              currentQuantity -
+              calculatedQuantity;
+
+            return {
+              item,
+              produced,
+              sold,
+              calculatedQuantity,
+              difference,
+              status:
+                Math.abs(
+                  difference
+                ) < 0.000001
+                  ? "Balanced"
+                  : "Difference",
+            } satisfies Reconciliation;
+          }
+
+          /* ==================================
+             RAW MATERIALS / UTILITIES
+
+             OPENING STOCK
+             + STOCK INCREASE
+             - PRODUCTION CONSUMPTION
+             - STOCK DECREASE
+          ================================== */
+
+          const itemMovements =
+            movements.filter(
+              (movement) =>
+                movement.inventory_id ===
+                item.id
+            );
+
+          let openingStock = 0;
+
+          let stockIncrease = 0;
+
+          let productionConsumption =
+            0;
+
+          let stockDecrease = 0;
+
+          /* ==================================
+             PROCESS MOVEMENTS
+          ================================== */
+
+          itemMovements.forEach(
+            (movement) => {
+              const quantity =
+                number(
+                  movement.quantity
+                );
+
+              const type =
+                movement.movement_type
+                  ?.trim()
+                  .toLowerCase();
+
+              switch (type) {
+                /* OPENING STOCK */
+
+                case "opening_stock":
+                  openingStock +=
+                    quantity;
+                  break;
+
+                /* STOCK INCREASE */
+
+                case "increase":
+
+                case "stock_in":
+
+                case "purchase":
+
+                case "purchase_received":
+
+                case "adjustment_in":
+
+                  stockIncrease +=
+                    quantity;
+                  break;
+
+                /* PRODUCTION CONSUMPTION */
+
+                case "production_consumption":
+
+                  productionConsumption +=
+                    quantity;
+                  break;
+
+                /* STOCK DECREASE */
+
+                case "decrease":
+
+                case "stock_out":
+
+                case "adjustment_out":
+
+                  stockDecrease +=
+                    quantity;
+                  break;
+
+                default:
+
+                  console.warn(
+                    "Unknown inventory movement:",
+                    type
+                  );
+              }
+            }
+          );
+
+          /* ==================================
+             CALCULATED STOCK
+          ================================== */
+
+          const calculatedQuantity =
+            openingStock +
+            stockIncrease -
+            productionConsumption -
+            stockDecrease;
+
+          const difference =
+            currentQuantity -
+            calculatedQuantity;
+
+          return {
+            item,
+
+            produced: 0,
+
+            sold: 0,
+
+            calculatedQuantity,
+
+            difference,
+
+            status:
+              Math.abs(
+                difference
+              ) < 0.000001
+                ? "Balanced"
+                : "Difference",
+          } satisfies Reconciliation;
+        }
+      );
+    }, [
+      inventory,
+      movements,
+      productionByProduct,
+      salesByProduct,
+    ]);
+
+  /* ========================================
+     FILTERED INVENTORY
+  ======================================== */
+
+  const filteredInventory =
+    useMemo(() => {
+      const searchTerm =
+        search
+          .trim()
           .toLowerCase();
 
-      if (!name) {
-        return;
+      if (!searchTerm) {
+        return reconciled;
       }
 
-      map.set(
-        name,
-        (map.get(name) || 0) +
-          number(record.quantity)
+      return reconciled.filter(
+        (record) => {
+          return (
+            record.item.item_name
+              .toLowerCase()
+              .includes(
+                searchTerm
+              ) ||
+            record.item.category
+              .toLowerCase()
+              .includes(
+                searchTerm
+              )
+          );
+        }
       );
-    });
+    }, [
+      reconciled,
+      search,
+    ]);
 
-    return map;
-  }, [production]);
+  /* ========================================
+     TOTAL INVENTORY ITEMS
+  ======================================== */
 
-  /*
-   * Sales totals by product.
-   */
-  const salesByProduct = useMemo(() => {
-    const map = new Map<
-      string,
-      number
-    >();
+  const inventoryCount =
+    inventory.length;
 
-    sales.forEach((sale) => {
-      const name =
-        sale.product_name
-          ?.trim()
-          .toLowerCase();
+  /* ========================================
+     TOTAL QUANTITY
+  ======================================== */
 
-      if (!name) {
-        return;
-      }
+  const totalQuantity =
+    inventory.reduce(
+      (total, item) =>
+        total +
+        number(
+          item.quantity
+        ),
+      0
+    );
 
-      map.set(
-        name,
-        (map.get(name) || 0) +
-          number(sale.quantity)
-      );
-    });
+  /* ========================================
+     INVENTORY VALUE
+  ======================================== */
 
-    return map;
-  }, [sales]);
+  const inventoryValue =
+    inventory.reduce(
+      (total, item) => {
+        return (
+          total +
+          number(
+            item.quantity
+          ) *
+            number(
+              item.unit_cost
+            )
+        );
+      },
+      0
+    );
 
-  /*
-   * Build reconciliation.
-   *
-   * Calculated quantity:
-   *
-   * production - sales
-   *
-   * Difference:
-   *
-   * database inventory - calculated quantity
-   */
-  const reconciled = useMemo(() => {
-    return inventory.map((item) => {
-      const key =
-        item.item_name
-          ?.trim()
-          .toLowerCase();
+  /* ========================================
+     LOW STOCK
 
-      const produced =
-        productionByProduct.get(key) ||
-        0;
-
-      const sold =
-        salesByProduct.get(key) ||
-        0;
-
-      const calculatedQuantity =
-        produced - sold;
-
-      const difference =
-        number(item.quantity) -
-        calculatedQuantity;
-
-      return {
-        item,
-        produced,
-        sold,
-        calculatedQuantity,
-        difference,
-        status:
-          Math.abs(difference) < 0.000001
-            ? "Balanced"
-            : "Difference",
-      } satisfies Reconciliation;
-    });
-  }, [
-    inventory,
-    productionByProduct,
-    salesByProduct,
-  ]);
-
-  /*
-   * Low stock.
-   *
-   * We use a simple threshold of 20
-   * units because the current
-   * inventory interface does not
-   * contain a minimum_quantity field.
-   */
-  const LOW_STOCK_THRESHOLD = 20;
+     CURRENT RULE:
+     QUANTITY <= 20
+  ======================================== */
 
   const lowStockCount =
     inventory.filter(
       (item) =>
-        number(item.quantity) <=
-        LOW_STOCK_THRESHOLD
+        number(
+          item.quantity
+        ) <= 20
     ).length;
+
+  /* ========================================
+     BALANCED COUNT
+  ======================================== */
+
+  const balancedCount =
+    reconciled.filter(
+      (item) =>
+        item.status ===
+        "Balanced"
+    ).length;
+
+  /* ========================================
+     DIFFERENCE COUNT
+  ======================================== */
 
   const differenceCount =
     reconciled.filter(
       (item) =>
-        item.status === "Difference"
+        item.status ===
+        "Difference"
     ).length;
 
-  const totalQuantity =
-    inventory.reduce(
-      (sum, item) =>
-        sum + number(item.quantity),
-      0
+  /* ========================================
+     LOADING
+  ======================================== */
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        Loading inventory...
+      </div>
     );
+  }
 
-  const inventoryValue =
-    inventory.reduce(
-      (sum, item) =>
-        sum +
-        number(item.quantity) *
-          number(item.unit_cost),
-      0
-    );
+  /* ========================================
+     ERROR
+  ======================================== */
 
-  const filtered =
-    reconciled.filter((record) => {
-      const query =
-        search.trim().toLowerCase();
-
-      const matchesSearch =
-        !query ||
-        record.item.item_name
-          .toLowerCase()
-          .includes(query) ||
-        record.item.category
-          ?.toLowerCase()
-          .includes(query);
-
-      const matchesLowStock =
-        !showLowStock ||
-        number(record.item.quantity) <=
-          LOW_STOCK_THRESHOLD;
-
-      return (
-        matchesSearch &&
-        matchesLowStock
-      );
-    });
-
-  return (
-    <main className="space-y-8 p-6">
-
-      {/* HEADER */}
-
-      <div>
-        <h1 className="text-3xl font-bold">
-          Inventory
+  if (error) {
+    return (
+      <div className="p-6">
+        <h1 className="text-xl font-bold">
+          Inventory Error
         </h1>
 
-        <p className="mt-1 text-gray-600">
-          Manage stock and reconcile
-          inventory against production
-          and sales.
+        <p className="mt-2 text-red-600">
+          {error}
         </p>
       </div>
+    );
+  }
 
-      {/* INVENTORY FORM */}
+  /* ========================================
+     PAGE
+  ======================================== */
 
-      <section className="rounded-lg border bg-white p-6 shadow-sm">
+  return (
+    <div className="space-y-6 p-6">
 
-        <h2 className="mb-5 text-xl font-bold">
-          Add Inventory Item
-        </h2>
+      {/* ================================
+          PAGE HEADER
+      ================================= */}
 
-        <InventoryForm />
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 
-      </section>
+        <div>
+          <h1 className="text-3xl font-bold">
+            Inventory
+          </h1>
 
-      {/* ERROR */}
-
-      {errorMessage && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-
-          <p className="font-semibold">
-            Inventory Error
-          </p>
-
-          <p className="mt-1 text-sm">
-            {errorMessage}
-          </p>
-
-        </div>
-      )}
-
-      {/* SUMMARY */}
-
-      <section className="grid gap-4 md:grid-cols-4">
-
-        <div className="rounded-lg border bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">
-            Inventory Items
-          </p>
-
-          <p className="mt-2 text-2xl font-bold">
-            {inventory.length}
+          <p className="text-sm text-muted-foreground">
+            Monitor raw materials,
+            stock levels and inventory
+            reconciliation.
           </p>
         </div>
 
-        <div className="rounded-lg border bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">
-            Total Quantity
-          </p>
+        <div className="flex gap-3">
 
-          <p className="mt-2 text-2xl font-bold">
-            {totalQuantity.toLocaleString()}
-          </p>
+          <Link
+            href="/inventory/history"
+            className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium"
+          >
+            <History className="h-4 w-4" />
+
+            Inventory History
+          </Link>
+
+          <Link
+            href="/inventory/movements"
+            className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium"
+          >
+            <ArrowUp className="h-4 w-4" />
+
+            Stock Movements
+          </Link>
+
         </div>
+      </div>
 
-        <div className="rounded-lg border bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">
-            Inventory Value
-          </p>
+      {/* ================================
+          STATISTICS
+      ================================= */}
 
-          <p className="mt-2 text-2xl font-bold">
-            {money(inventoryValue)}
-          </p>
-        </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
 
-        <div className="rounded-lg border bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">
-            Low Stock
-          </p>
+        {/* INVENTORY ITEMS */}
 
-          <p className="mt-2 text-2xl font-bold text-red-600">
-            {lowStockCount}
-          </p>
-        </div>
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
 
-      </section>
+          <div className="flex items-center justify-between">
 
-      {/* RECONCILIATION STATUS */}
+            <p className="text-sm text-muted-foreground">
+              Inventory Items
+            </p>
 
-      <section className="grid gap-4 md:grid-cols-2">
-
-        <div className="rounded-lg border bg-green-50 p-5">
-          <p className="text-sm text-green-700">
-            Balanced Items
-          </p>
-
-          <p className="mt-2 text-2xl font-bold text-green-700">
-            {
-              reconciled.filter(
-                (record) =>
-                  record.status ===
-                  "Balanced"
-              ).length
-            }
-          </p>
-        </div>
-
-        <div className="rounded-lg border bg-yellow-50 p-5">
-          <p className="text-sm text-yellow-700">
-            Reconciliation Differences
-          </p>
-
-          <p className="mt-2 text-2xl font-bold text-yellow-700">
-            {differenceCount}
-          </p>
-        </div>
-
-      </section>
-
-      {/* SEARCH / FILTER */}
-
-      <section className="rounded-lg border bg-white p-5 shadow-sm">
-
-        <div className="flex flex-col gap-4 md:flex-row md:items-end">
-
-          <div className="flex-1">
-
-            <label
-              htmlFor="inventory-search"
-              className="mb-2 block text-sm font-semibold"
-            >
-              Search Inventory
-            </label>
-
-            <input
-              id="inventory-search"
-              type="text"
-              value={search}
-              onChange={(event) =>
-                setSearch(
-                  event.target.value
-                )
-              }
-              placeholder="Search product or category..."
-              className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2"
-            />
+            <Package className="h-5 w-5 text-muted-foreground" />
 
           </div>
 
-          <button
-            type="button"
-            onClick={() =>
-              setShowLowStock(
-                (value) => !value
-              )
-            }
-            className={`rounded-lg px-4 py-2 text-sm font-semibold ${
-              showLowStock
-                ? "bg-red-600 text-white"
-                : "border bg-white hover:bg-gray-50"
-            }`}
-          >
-            {showLowStock
-              ? "Showing Low Stock"
-              : "Show Low Stock"}
-          </button>
-
-          <button
-            type="button"
-            onClick={loadInventory}
-            disabled={loading}
-            className="rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"
-          >
-            {loading
-              ? "Refreshing..."
-              : "Refresh"}
-          </button>
+          <p className="mt-3 text-2xl font-bold">
+            {inventoryCount}
+          </p>
 
         </div>
 
-      </section>
+        {/* TOTAL QUANTITY */}
 
-      {/* INVENTORY TABLE */}
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
 
-      {loading ? (
+          <div className="flex items-center justify-between">
 
-        <div className="rounded-lg border bg-white p-10 text-center">
-          Loading inventory...
+            <p className="text-sm text-muted-foreground">
+              Total Quantity
+            </p>
+
+            <Warehouse className="h-5 w-5 text-muted-foreground" />
+
+          </div>
+
+          <p className="mt-3 text-2xl font-bold">
+            {totalQuantity.toLocaleString(
+              undefined,
+              {
+                maximumFractionDigits:
+                  3,
+              }
+            )}
+          </p>
+
         </div>
 
-      ) : (
+        {/* INVENTORY VALUE */}
 
-        <div className="overflow-x-auto rounded-lg border bg-white shadow-sm">
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
 
-          <table className="min-w-full">
+          <div className="flex items-center justify-between">
 
-            <thead className="bg-gray-50">
+            <p className="text-sm text-muted-foreground">
+              Inventory Value
+            </p>
 
-              <tr>
+            <Scale className="h-5 w-5 text-muted-foreground" />
 
-                <th className="border-b p-3 text-left text-sm font-semibold">
-                  Product
-                </th>
+          </div>
 
-                <th className="border-b p-3 text-left text-sm font-semibold">
-                  Category
-                </th>
+          <p className="mt-3 text-xl font-bold">
+            {formatCurrency(
+              inventoryValue
+            )}
+          </p>
 
-                <th className="border-b p-3 text-left text-sm font-semibold">
-                  Unit
-                </th>
+        </div>
 
-                <th className="border-b p-3 text-right text-sm font-semibold">
-                  Current Stock
-                </th>
+        {/* LOW STOCK */}
 
-                <th className="border-b p-3 text-right text-sm font-semibold">
-                  Produced
-                </th>
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
 
-                <th className="border-b p-3 text-right text-sm font-semibold">
-                  Sold
-                </th>
+          <div className="flex items-center justify-between">
 
-                <th className="border-b p-3 text-right text-sm font-semibold">
-                  Calculated
-                </th>
+            <p className="text-sm text-muted-foreground">
+              Low Stock
+            </p>
 
-                <th className="border-b p-3 text-right text-sm font-semibold">
-                  Difference
-                </th>
+            <AlertTriangle className="h-5 w-5 text-muted-foreground" />
 
-                <th className="border-b p-3 text-center text-sm font-semibold">
-                  Status
-                </th>
+          </div>
 
-                <th className="border-b p-3 text-right text-sm font-semibold">
-                  Value
-                </th>
+          <p className="mt-3 text-2xl font-bold">
+            {lowStockCount}
+          </p>
 
-              </tr>
+        </div>
 
-            </thead>
+        {/* BALANCED */}
 
-            <tbody>
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
 
-              {filtered.length === 0 ? (
+          <div className="flex items-center justify-between">
 
-                <tr>
+            <p className="text-sm text-muted-foreground">
+              Balanced Items
+            </p>
 
-                  <td
-                    colSpan={10}
-                    className="p-10 text-center text-gray-500"
+            <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
+
+          </div>
+
+          <p className="mt-3 text-2xl font-bold">
+            {balancedCount}
+          </p>
+
+        </div>
+
+        {/* DIFFERENCES */}
+
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
+
+          <div className="flex items-center justify-between">
+
+            <p className="text-sm text-muted-foreground">
+              Reconciliation Differences
+            </p>
+
+            <ArrowDown className="h-5 w-5 text-muted-foreground" />
+
+          </div>
+
+          <p className="mt-3 text-2xl font-bold">
+            {differenceCount}
+          </p>
+
+        </div>
+
+      </div>
+
+      {/* ================================
+          SEARCH
+      ================================= */}
+
+      <div className="relative">
+
+        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+
+        <input
+          type="text"
+          placeholder="Search Inventory"
+          value={search}
+          onChange={(event) =>
+            setSearch(
+              event.target.value
+            )
+          }
+          className="w-full rounded-lg border py-2 pl-10 pr-4 outline-none"
+        />
+
+      </div>
+
+      {/* ================================
+          INVENTORY TABLE
+      ================================= */}
+
+      <div className="overflow-x-auto rounded-xl border">
+
+        <table className="w-full text-sm">
+
+          <thead className="border-b bg-muted/50">
+
+            <tr>
+
+              <th className="p-4 text-left">
+                Product
+              </th>
+
+              <th className="p-4 text-left">
+                Category
+              </th>
+
+              <th className="p-4 text-left">
+                Unit
+              </th>
+
+              <th className="p-4 text-right">
+                Current Stock
+              </th>
+
+              <th className="p-4 text-right">
+                Produced
+              </th>
+
+              <th className="p-4 text-right">
+                Sold
+              </th>
+
+              <th className="p-4 text-right">
+                Calculated
+              </th>
+
+              <th className="p-4 text-right">
+                Difference
+              </th>
+
+              <th className="p-4 text-center">
+                Status
+              </th>
+
+              <th className="p-4 text-right">
+                Value
+              </th>
+
+            </tr>
+
+          </thead>
+
+          <tbody>
+
+            {filteredInventory.map(
+              (record) => {
+
+                const item =
+                  record.item;
+
+                const value =
+                  number(
+                    item.quantity
+                  ) *
+                  number(
+                    item.unit_cost
+                  );
+
+                return (
+                  <tr
+                    key={item.id}
+                    className="border-b last:border-0"
                   >
-                    No inventory items
-                    found.
-                  </td>
 
-                </tr>
+                    <td className="p-4 font-medium">
+                      {item.item_name}
+                    </td>
 
-              ) : (
+                    <td className="p-4">
+                      {item.category}
+                    </td>
 
-                filtered.map(
-                  (record) => {
-                    const quantity =
-                      number(
-                        record.item
-                          .quantity
-                      );
+                    <td className="p-4">
+                      {item.unit}
+                    </td>
 
-                    const lowStock =
-                      quantity <=
-                      LOW_STOCK_THRESHOLD;
-
-                    return (
-                      <tr
-                        key={
-                          record.item.id
+                    <td className="p-4 text-right">
+                      {number(
+                        item.quantity
+                      ).toLocaleString(
+                        undefined,
+                        {
+                          maximumFractionDigits:
+                            3,
                         }
-                        className="border-b last:border-b-0 hover:bg-gray-50"
-                      >
+                      )}
+                    </td>
 
-                        <td className="p-3 font-semibold">
-                          {
-                            record.item
-                              .item_name
-                          }
-                        </td>
+                    <td className="p-4 text-right">
 
-                        <td className="p-3">
-                          {
-                            record.item
-                              .category
-                          }
-                        </td>
+                      {record.produced ===
+                      0
+                        ? "0"
+                        : record.produced.toLocaleString()}
 
-                        <td className="p-3">
-                          {
-                            record.item
-                              .unit
-                          }
-                        </td>
+                    </td>
 
-                        <td
-                          className={`p-3 text-right font-bold ${
-                            lowStock
-                              ? "text-red-600"
-                              : ""
-                          }`}
-                        >
-                          {quantity.toLocaleString()}
-                        </td>
+                    <td className="p-4 text-right">
 
-                        <td className="p-3 text-right">
-                          {record.produced.toLocaleString()}
-                        </td>
+                      {record.sold ===
+                      0
+                        ? "0"
+                        : record.sold.toLocaleString()}
 
-                        <td className="p-3 text-right">
-                          {record.sold.toLocaleString()}
-                        </td>
+                    </td>
 
-                        <td className="p-3 text-right">
-                          {record.calculatedQuantity.toLocaleString()}
-                        </td>
+                    <td className="p-4 text-right">
 
-                        <td
-                          className={`p-3 text-right font-semibold ${
-                            record.difference ===
-                            0
-                              ? "text-green-600"
-                              : "text-yellow-600"
-                          }`}
-                        >
-                          {record.difference.toLocaleString()}
-                        </td>
+                      {record.calculatedQuantity.toLocaleString(
+                        undefined,
+                        {
+                          maximumFractionDigits:
+                            3,
+                        }
+                      )}
 
-                        <td className="p-3 text-center">
+                    </td>
 
-                          {record.status ===
-                          "Balanced" ? (
+                    <td className="p-4 text-right">
 
-                            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                              Balanced
-                            </span>
-
-                          ) : (
-
-                            <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
-                              Difference
-                            </span>
-
+                      {Math.abs(
+                        record.difference
+                      ) < 0.000001
+                        ? "0"
+                        : record.difference.toLocaleString(
+                            undefined,
+                            {
+                              maximumFractionDigits:
+                                3,
+                            }
                           )}
 
-                        </td>
+                    </td>
 
-                        <td className="whitespace-nowrap p-3 text-right">
-                          {money(
-                            quantity *
-                              number(
-                                record.item
-                                  .unit_cost
-                              )
-                          )}
-                        </td>
+                    <td className="p-4 text-center">
 
-                      </tr>
-                    );
-                  }
-                )
+                      {record.status ===
+                      "Balanced" ? (
 
-              )}
+                        <span className="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+                          Balanced
+                        </span>
 
-            </tbody>
+                      ) : (
 
-          </table>
+                        <span className="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
+                          Difference
+                        </span>
 
+                      )}
+
+                    </td>
+
+                    <td className="p-4 text-right font-medium">
+
+                      {formatCurrency(
+                        value
+                      )}
+
+                    </td>
+
+                  </tr>
+                );
+              }
+            )}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+      {/* ================================
+          NO RESULTS
+      ================================= */}
+
+      {filteredInventory.length ===
+        0 && (
+
+        <div className="rounded-lg border p-8 text-center text-muted-foreground">
+          No inventory items found.
         </div>
 
       )}
 
-      {/* IMPORTANT RECONCILIATION NOTE */}
+      {/* ================================
+          RECONCILIATION INFORMATION
+      ================================= */}
 
-      <div className="rounded-lg border border-blue-200 bg-blue-50 p-5 text-sm text-blue-800">
+      <div className="rounded-xl border bg-muted/30 p-5">
 
-        <p className="font-semibold">
-          Inventory reconciliation
-        </p>
+        <h2 className="font-semibold">
+          Inventory Reconciliation
+        </h2>
 
-        <p className="mt-1">
-          Calculated stock is based on
-          production quantity minus sales
-          quantity for matching product
-          names. The Difference column
-          compares that calculated value
-          with the quantity currently stored
-          in the inventory table.
-        </p>
+        <div className="mt-3 space-y-2 text-sm text-muted-foreground">
 
-        <p className="mt-2">
-          A difference does not automatically
-          mean the inventory is wrong. It can
-          represent opening stock, manual
-          adjustments, damaged blocks, or
-          historical transactions that were
-          recorded before the reconciliation
-          system was introduced.
-        </p>
+          <p>
+            <strong>
+              Finished Products:
+            </strong>{" "}
+            Produced − Sold
+          </p>
+
+          <p>
+            <strong>
+              Raw Materials:
+            </strong>{" "}
+            Opening Stock + Stock
+            Increases − Production
+            Consumption − Stock
+            Decreases
+          </p>
+
+          <p>
+            <strong>
+              Difference:
+            </strong>{" "}
+            Current Database Stock −
+            Calculated Stock
+          </p>
+
+        </div>
 
       </div>
 
-    </main>
+    </div>
   );
 }

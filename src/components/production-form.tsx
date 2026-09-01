@@ -1,111 +1,374 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import { createProduction } from "@/services/production";
-
-const PRODUCTS = [
-  "5-inch Solid Block",
-  "6-inch Solid Block",
-  "5-inch Hollow Block",
-  "6-inch Hollow Block",
-] as const;
-
-type ProductName = (typeof PRODUCTS)[number];
-
-type Recipe = {
-  quantity: number;
-  cement_used: number;
-  chippings_used: number;
-  quarry_dust_used: number;
-  water_used: number;
-};
-
-const RECIPES: Record<ProductName, Recipe> = {
-  "5-inch Solid Block": {
-    quantity: 60,
-    cement_used: 1,
-    chippings_used: 0.2,
-    quarry_dust_used: 0.6,
-    water_used: 80,
-  },
-
-  "6-inch Solid Block": {
-    quantity: 50,
-    cement_used: 1,
-    chippings_used: 0.2,
-    quarry_dust_used: 0.6,
-    water_used: 80,
-  },
-
-  "5-inch Hollow Block": {
-    quantity: 65,
-    cement_used: 1,
-    chippings_used: 0.2,
-    quarry_dust_used: 0.6,
-    water_used: 80,
-  },
-
-  "6-inch Hollow Block": {
-    quantity: 60,
-    cement_used: 1,
-    chippings_used: 0.2,
-    quarry_dust_used: 0.6,
-    water_used: 80,
-  },
-};
-
-const MATERIAL_COSTS = {
-  cement: 75,
-  chippings: 235,
-  quarryDust: 235,
-  water: 0.5,
-};
+import {
+  getProductionRecipes,
+  type ProductionRecipe,
+} from "@/services/production-recipes";
+import { getInventoryCosts } from "@/services/inventory";
 
 type ProductionFormProps = {
   onSuccess?: () => void;
 };
 
+type MaterialCosts = {
+  Cement: number;
+  "Quarry Dust": number;
+  Chippings: number;
+  Water: number;
+};
+
 export default function ProductionForm({
   onSuccess,
 }: ProductionFormProps) {
-  const [productName, setProductName] =
-    useState<ProductName>("5-inch Solid Block");
+  const [recipes, setRecipes] = useState<
+    ProductionRecipe[]
+  >([]);
 
-  const [quantity, setQuantity] = useState("");
-  const [cementUsed, setCementUsed] = useState("");
-  const [chippingsUsed, setChippingsUsed] = useState("");
-  const [quarryDustUsed, setQuarryDustUsed] =
+  const [recipesLoading, setRecipesLoading] =
+    useState(true);
+
+  const [recipesError, setRecipesError] =
     useState("");
-  const [waterUsed, setWaterUsed] = useState("");
 
-  const [useRecipe, setUseRecipe] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [materialCosts, setMaterialCosts] =
+    useState<Partial<MaterialCosts>>({});
+
+  const [costsLoading, setCostsLoading] =
+    useState(true);
+
+  const [costsError, setCostsError] =
+    useState("");
+
+  const [productName, setProductName] =
+    useState("");
+
+  const [quantity, setQuantity] =
+    useState("");
+
+  const [cementUsed, setCementUsed] =
+    useState("");
+
+  const [waterUsed, setWaterUsed] =
+    useState("");
+
+  const [loading, setLoading] =
+    useState(false);
 
   const [errorMessage, setErrorMessage] =
     useState("");
+
   const [successMessage, setSuccessMessage] =
     useState("");
 
-  const selectedRecipe = RECIPES[productName];
+  /*
+   * Load official production recipes
+   * from Supabase.
+   */
+  useEffect(() => {
+    let mounted = true;
 
+    async function loadRecipes() {
+      setRecipesLoading(true);
+      setRecipesError("");
+
+      const result =
+        await getProductionRecipes();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result.error) {
+        console.error(
+          "Production recipes error:",
+          result.error
+        );
+
+        setRecipesError(
+          result.error.message
+        );
+
+        setRecipes([]);
+      } else {
+        setRecipes(result.data);
+
+        if (
+          result.data.length > 0
+        ) {
+          setProductName(
+            result.data[0].product_name
+          );
+        }
+      }
+
+      setRecipesLoading(false);
+    }
+
+    loadRecipes();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  /*
+   * Load current material costs
+   * from inventory.
+   */
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadMaterialCosts() {
+      setCostsLoading(true);
+      setCostsError("");
+
+      const result =
+        await getInventoryCosts();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result.error) {
+        console.error(
+          "Material cost error:",
+          result.error
+        );
+
+        setCostsError(
+          result.error.message
+        );
+
+        setMaterialCosts({});
+      } else {
+        setMaterialCosts(
+          result.data
+        );
+      }
+
+      setCostsLoading(false);
+    }
+
+    loadMaterialCosts();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  /*
+   * Selected recipe.
+   */
+  const selectedRecipe =
+    useMemo(
+      () =>
+        recipes.find(
+          (recipe) =>
+            recipe.product_name ===
+            productName
+        ) ?? null,
+      [recipes, productName]
+    );
+
+  /*
+   * Calculate standard production
+   * requirements dynamically.
+   *
+   * Example for 5-inch Solid:
+   *
+   * 60 blocks
+   * ÷ 60 blocks/bag
+   * = 1 production batch
+   *
+   * 6 wheelbarrows × 90 L
+   * = 540 L
+   * = 0.540 m³
+   */
+  const standardRequirement =
+    useMemo(() => {
+      if (!selectedRecipe) {
+        return null;
+      }
+
+      const quantityNumber =
+        Number(quantity);
+
+      if (
+        !Number.isFinite(
+          quantityNumber
+        ) ||
+        quantityNumber <= 0
+      ) {
+        return null;
+      }
+
+      const batches =
+        quantityNumber /
+        selectedRecipe.target_yield;
+
+      const cementBags =
+        batches *
+        selectedRecipe.cement_bags;
+
+      const quarryDustWheelbarrows =
+        batches *
+        selectedRecipe.quarry_dust_wheelbarrows;
+
+      const chippingsWheelbarrows =
+        batches *
+        selectedRecipe.chippings_wheelbarrows;
+
+      const quarryDustM3 =
+        (quarryDustWheelbarrows *
+          selectedRecipe.wheelbarrow_litres) /
+        1000;
+
+      const chippingsM3 =
+        (chippingsWheelbarrows *
+          selectedRecipe.wheelbarrow_litres) /
+        1000;
+
+      const waterMin =
+        batches *
+        selectedRecipe.water_min_litres;
+
+      const waterMax =
+        batches *
+        selectedRecipe.water_max_litres;
+
+      const waterTarget =
+        (waterMin + waterMax) / 2;
+
+      return {
+        batches,
+        cementBags,
+        quarryDustWheelbarrows,
+        chippingsWheelbarrows,
+        quarryDustM3,
+        chippingsM3,
+        waterMin,
+        waterMax,
+        waterTarget,
+      };
+    }, [
+      selectedRecipe,
+      quantity,
+    ]);
+
+  /*
+   * Current inventory prices.
+   */
+  const cementCostPerBag =
+    Number(
+      materialCosts["Cement"] ?? 0
+    );
+
+  const quarryDustCostPerM3 =
+    Number(
+      materialCosts["Quarry Dust"] ?? 0
+    );
+
+  const chippingsCostPerM3 =
+    Number(
+      materialCosts["Chippings"] ?? 0
+    );
+
+  const waterCostPerLitre =
+    Number(
+      materialCosts["Water"] ?? 0
+    );
+
+  /*
+   * Check that all required prices
+   * exist before allowing production.
+   */
+  const missingMaterialCosts =
+    useMemo(() => {
+      const missing: string[] = [];
+
+      if (
+        !Number.isFinite(
+          materialCosts["Cement"]
+        )
+      ) {
+        missing.push("Cement");
+      }
+
+      if (
+        !Number.isFinite(
+          materialCosts["Quarry Dust"]
+        )
+      ) {
+        missing.push("Quarry Dust");
+      }
+
+      if (
+        !Number.isFinite(
+          materialCosts["Chippings"]
+        )
+      ) {
+        missing.push("Chippings");
+      }
+
+      if (
+        !Number.isFinite(
+          materialCosts["Water"]
+        )
+      ) {
+        missing.push("Water");
+      }
+
+      return missing;
+    }, [materialCosts]);
+
+  /*
+   * Production cost preview.
+   *
+   * Chippings and Quarry Dust are
+   * automatically calculated from the
+   * recipe and converted to m³.
+   */
   const costPreview = useMemo(() => {
-    const cement = Number(cementUsed || 0);
-    const chippings = Number(chippingsUsed || 0);
-    const quarryDust = Number(quarryDustUsed || 0);
-    const water = Number(waterUsed || 0);
-    const qty = Number(quantity || 0);
+    const cement =
+      Number(cementUsed || 0);
+
+    const water =
+      Number(waterUsed || 0);
+
+    const chippings =
+      standardRequirement
+        ?.chippingsM3 ?? 0;
+
+    const quarryDust =
+      standardRequirement
+        ?.quarryDustM3 ?? 0;
+
+    const quantityNumber =
+      Number(quantity || 0);
 
     const cementCost =
-      cement * MATERIAL_COSTS.cement;
+      cement *
+      cementCostPerBag;
 
     const chippingsCost =
-      chippings * MATERIAL_COSTS.chippings;
+      chippings *
+      chippingsCostPerM3;
 
     const quarryDustCost =
-      quarryDust * MATERIAL_COSTS.quarryDust;
+      quarryDust *
+      quarryDustCostPerM3;
 
     const waterCost =
-      water * MATERIAL_COSTS.water;
+      water *
+      waterCostPerLitre;
 
     const totalCost =
       cementCost +
@@ -114,7 +377,9 @@ export default function ProductionForm({
       waterCost;
 
     const costPerBlock =
-      qty > 0 ? totalCost / qty : 0;
+      quantityNumber > 0
+        ? totalCost / quantityNumber
+        : 0;
 
     return {
       cementCost,
@@ -126,51 +391,58 @@ export default function ProductionForm({
     };
   }, [
     cementUsed,
-    chippingsUsed,
-    quarryDustUsed,
     waterUsed,
     quantity,
+    standardRequirement,
+    cementCostPerBag,
+    quarryDustCostPerM3,
+    chippingsCostPerM3,
+    waterCostPerLitre,
   ]);
 
-  function applyRecipe(product: ProductName) {
-    const recipe = RECIPES[product];
-
-    setQuantity(String(recipe.quantity));
-    setCementUsed(String(recipe.cement_used));
-    setChippingsUsed(
-      String(recipe.chippings_used)
-    );
-    setQuarryDustUsed(
-      String(recipe.quarry_dust_used)
-    );
-    setWaterUsed(String(recipe.water_used));
-  }
-
   function handleProductChange(
-    value: ProductName
+    value: string
   ) {
     setProductName(value);
 
-    if (useRecipe) {
-      applyRecipe(value);
-    }
+    setQuantity("");
+    setCementUsed("");
+    setWaterUsed("");
+
+    setErrorMessage("");
+    setSuccessMessage("");
   }
 
-  function handleRecipeChange(
-    checked: boolean
-  ) {
-    setUseRecipe(checked);
+  function applyStandardRecipe() {
+    if (
+      !selectedRecipe ||
+      !standardRequirement
+    ) {
+      setErrorMessage(
+        "Enter the production quantity first."
+      );
 
-    if (checked) {
-      applyRecipe(productName);
+      return;
     }
+
+    setCementUsed(
+      standardRequirement.cementBags.toFixed(
+        2
+      )
+    );
+
+    setWaterUsed(
+      standardRequirement.waterTarget.toFixed(
+        2
+      )
+    );
+
+    setErrorMessage("");
   }
 
   function clearForm() {
     setQuantity("");
     setCementUsed("");
-    setChippingsUsed("");
-    setQuarryDustUsed("");
     setWaterUsed("");
 
     setErrorMessage("");
@@ -185,95 +457,147 @@ export default function ProductionForm({
     setErrorMessage("");
     setSuccessMessage("");
 
-    const trimmedProduct =
-      productName.trim();
+    if (!selectedRecipe) {
+      setErrorMessage(
+        "Please select a valid production recipe."
+      );
 
-    const quantityNumber = Number(quantity);
-    const cementNumber = Number(cementUsed);
-    const chippingsNumber =
-      Number(chippingsUsed);
-    const quarryDustNumber =
-      Number(quarryDustUsed);
-    const waterNumber = Number(waterUsed);
+      return;
+    }
+
+    if (costsLoading) {
+      setErrorMessage(
+        "Material costs are still loading. Please wait."
+      );
+
+      return;
+    }
+
+    if (
+      missingMaterialCosts.length > 0
+    ) {
+      setErrorMessage(
+        `Cannot record production. Missing inventory cost for: ${missingMaterialCosts.join(
+          ", "
+        )}.`
+      );
+
+      return;
+    }
+
+    const trimmedProduct =
+      selectedRecipe.product_name.trim();
+
+    const quantityNumber =
+      Number(quantity);
+
+    const cementNumber =
+      Number(cementUsed);
+
+    const waterNumber =
+      Number(waterUsed);
 
     if (!trimmedProduct) {
       setErrorMessage(
         "Product is required."
       );
+
       return;
     }
 
     if (
-      !Number.isInteger(quantityNumber) ||
+      !Number.isInteger(
+        quantityNumber
+      ) ||
       quantityNumber <= 0
     ) {
       setErrorMessage(
         "Production quantity must be a positive whole number."
       );
+
       return;
     }
 
     if (
-      !Number.isFinite(cementNumber) ||
-      cementNumber < 0
+      !Number.isFinite(
+        cementNumber
+      ) ||
+      cementNumber <= 0
     ) {
       setErrorMessage(
-        "Cement quantity cannot be negative."
+        "Cement quantity must be greater than zero."
       );
+
       return;
     }
 
     if (
-      !Number.isFinite(chippingsNumber) ||
-      chippingsNumber < 0
+      !Number.isFinite(
+        waterNumber
+      ) ||
+      waterNumber <= 0
     ) {
       setErrorMessage(
-        "Chippings quantity cannot be negative."
+        "Water quantity must be greater than zero."
       );
+
       return;
     }
 
     if (
-      !Number.isFinite(quarryDustNumber) ||
-      quarryDustNumber < 0
+      !standardRequirement
     ) {
       setErrorMessage(
-        "Quarry dust quantity cannot be negative."
+        "Unable to calculate the standard production requirement."
       );
+
       return;
     }
 
-    if (
-      !Number.isFinite(waterNumber) ||
-      waterNumber < 0
-    ) {
-      setErrorMessage(
-        "Water quantity cannot be negative."
-      );
-      return;
-    }
+    /*
+     * IMPORTANT:
+     *
+     * These values are NOT entered by
+     * the operator.
+     *
+     * They are calculated from the
+     * official database recipe.
+     */
+    const chippingsM3 =
+      standardRequirement.chippingsM3;
+
+    const quarryDustM3 =
+      standardRequirement.quarryDustM3;
 
     setLoading(true);
 
     try {
-      const result = await createProduction({
-        product_name: trimmedProduct,
+      const result =
+        await createProduction({
+          product_name:
+            trimmedProduct,
 
-        quantity: quantityNumber,
+          quantity:
+            quantityNumber,
 
-        cement_used: cementNumber,
+          cement_used:
+            cementNumber,
 
-        chippings_used: chippingsNumber,
+          chippings_used:
+            chippingsM3,
 
-        quarry_dust_used: quarryDustNumber,
+          quarry_dust_used:
+            quarryDustM3,
 
-        water_used: waterNumber,
-      });
+          water_used:
+            waterNumber,
+        });
 
       if (result.error) {
         setErrorMessage(
           result.error.message
         );
+
         return;
       }
 
@@ -300,21 +624,32 @@ export default function ProductionForm({
     }
   }
 
+  const cannotRecord =
+    loading ||
+    recipesLoading ||
+    costsLoading ||
+    recipes.length === 0 ||
+    missingMaterialCosts.length > 0;
+
   return (
     <form
       onSubmit={handleSubmit}
       className="space-y-6 rounded-xl border bg-white p-6 shadow-sm"
     >
+      {/* HEADER */}
+
       <div>
         <h2 className="text-xl font-bold">
           Record Production
         </h2>
 
         <p className="mt-1 text-sm text-gray-500">
-          Record finished block production and
-          automatically calculate production cost.
+          Record finished block production
+          using the official factory recipe.
         </p>
       </div>
+
+      {/* ERROR */}
 
       {errorMessage && (
         <div
@@ -325,6 +660,8 @@ export default function ProductionForm({
         </div>
       )}
 
+      {/* SUCCESS */}
+
       {successMessage && (
         <div
           role="status"
@@ -334,13 +671,41 @@ export default function ProductionForm({
         </div>
       )}
 
-      {/* Product */}
+      {/* RECIPE ERROR */}
+
+      {recipesError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+        >
+          Unable to load production recipes:
+          {" "}
+          {recipesError}
+        </div>
+      )}
+
+      {/* COST ERROR */}
+
+      {costsError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+        >
+          Unable to load current inventory
+          costs:
+          {" "}
+          {costsError}
+        </div>
+      )}
+
+      {/* PRODUCT */}
+
       <div className="space-y-2">
         <label
           htmlFor="production-product"
           className="block text-sm font-semibold"
         >
-          Product
+          Product Name
         </label>
 
         <select
@@ -348,109 +713,158 @@ export default function ProductionForm({
           value={productName}
           onChange={(event) =>
             handleProductChange(
-              event.target.value as ProductName
+              event.target.value
             )
           }
-          disabled={loading}
+          disabled={
+            loading ||
+            recipesLoading
+          }
           className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:ring-2 disabled:bg-gray-100"
+          required
         >
-          {PRODUCTS.map((product) => (
-            <option
-              key={product}
-              value={product}
-            >
-              {product}
-            </option>
-          ))}
+          <option value="">
+            Select product
+          </option>
+
+          {recipes.map(
+            (recipe) => (
+              <option
+                key={recipe.id}
+                value={
+                  recipe.product_name
+                }
+              >
+                {recipe.product_name}
+              </option>
+            )
+          )}
         </select>
       </div>
 
-      {/* Recipe */}
-      <div className="rounded-lg border bg-gray-50 p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold">
-              Standard Recipe
-            </p>
+      {/* STANDARD RECIPE */}
 
-            <p className="text-xs text-gray-500">
-              Use the standard material recipe for
-              the selected block.
-            </p>
+      {selectedRecipe && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <h3 className="font-semibold text-blue-900">
+            Standard Production Recipe
+          </h3>
+
+          <p className="mt-1 text-sm text-blue-800">
+            Target yield:{" "}
+            <strong>
+              {selectedRecipe.target_yield}
+            </strong>{" "}
+            blocks per bag of cement
+          </p>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-lg bg-white p-3">
+              <p className="text-xs text-gray-500">
+                Cement
+              </p>
+
+              <p className="mt-1 font-semibold">
+                {selectedRecipe.cement_bags}{" "}
+                bag
+              </p>
+            </div>
+
+            <div className="rounded-lg bg-white p-3">
+              <p className="text-xs text-gray-500">
+                Quarry Dust
+              </p>
+
+              <p className="mt-1 font-semibold">
+                {
+                  selectedRecipe.quarry_dust_wheelbarrows
+                }{" "}
+                wheelbarrows
+              </p>
+            </div>
+
+            <div className="rounded-lg bg-white p-3">
+              <p className="text-xs text-gray-500">
+                Chippings
+              </p>
+
+              <p className="mt-1 font-semibold">
+                {
+                  selectedRecipe.chippings_wheelbarrows
+                }{" "}
+                wheelbarrows
+              </p>
+            </div>
+
+            <div className="rounded-lg bg-white p-3">
+              <p className="text-xs text-gray-500">
+                Water
+              </p>
+
+              <p className="mt-1 font-semibold">
+                {
+                  selectedRecipe.water_min_litres
+                }
+                –
+                {
+                  selectedRecipe.water_max_litres
+                }{" "}
+                L
+              </p>
+            </div>
           </div>
 
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={useRecipe}
-              onChange={(event) =>
-                handleRecipeChange(
-                  event.target.checked
-                )
+          <div className="mt-4 rounded-lg bg-white p-3 text-sm">
+            <p className="font-semibold">
+              Factory Measurement
+            </p>
+
+            <p className="mt-1 text-gray-600">
+              1 wheelbarrow ={" "}
+              {
+                selectedRecipe.wheelbarrow_litres
               }
-              disabled={loading}
-              className="h-4 w-4"
-            />
+              {" L = "}
+              {(
+                selectedRecipe.wheelbarrow_litres /
+                1000
+              ).toFixed(2)}
+              {" m³"}
+            </p>
 
-            Use recipe
-          </label>
-        </div>
+            <p className="mt-1 text-gray-600">
+              Quarry Dust per bag ={" "}
+              {(
+                selectedRecipe
+                  .quarry_dust_wheelbarrows *
+                selectedRecipe.wheelbarrow_litres /
+                1000
+              ).toFixed(3)}
+              {" m³"}
+            </p>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
-          <div className="rounded-lg bg-white p-3">
-            <p className="text-xs text-gray-500">
-              Standard Yield
-            </p>
-            <p className="mt-1 font-semibold">
-              {selectedRecipe.quantity} pcs
-            </p>
-          </div>
-
-          <div className="rounded-lg bg-white p-3">
-            <p className="text-xs text-gray-500">
-              Cement
-            </p>
-            <p className="mt-1 font-semibold">
-              {selectedRecipe.cement_used} bag
-            </p>
-          </div>
-
-          <div className="rounded-lg bg-white p-3">
-            <p className="text-xs text-gray-500">
-              Chippings
-            </p>
-            <p className="mt-1 font-semibold">
-              {selectedRecipe.chippings_used} m³
-            </p>
-          </div>
-
-          <div className="rounded-lg bg-white p-3">
-            <p className="text-xs text-gray-500">
-              Quarry Dust
-            </p>
-            <p className="mt-1 font-semibold">
-              {selectedRecipe.quarry_dust_used} m³
-            </p>
-          </div>
-
-          <div className="rounded-lg bg-white p-3">
-            <p className="text-xs text-gray-500">
-              Water
-            </p>
-            <p className="mt-1 font-semibold">
-              {selectedRecipe.water_used} L
+            <p className="mt-1 text-gray-600">
+              Chippings per bag ={" "}
+              {(
+                selectedRecipe
+                  .chippings_wheelbarrows *
+                selectedRecipe.wheelbarrow_litres /
+                1000
+              ).toFixed(3)}
+              {" m³"}
             </p>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Production Quantity */}
+      {/* QUANTITY */}
+
       <div className="space-y-2">
         <label
           htmlFor="production-quantity"
           className="block text-sm font-semibold"
         >
-          Production Quantity
+          Quantity Produced
         </label>
 
         <div className="relative">
@@ -461,11 +875,16 @@ export default function ProductionForm({
             step="1"
             value={quantity}
             onChange={(event) =>
-              setQuantity(event.target.value)
+              setQuantity(
+                event.target.value
+              )
             }
-            disabled={loading}
+            disabled={
+              loading ||
+              recipesLoading
+            }
             required
-            placeholder="e.g. 60"
+            placeholder="Enter actual blocks produced"
             className="w-full rounded-lg border px-3 py-2.5 pr-16 text-sm outline-none focus:ring-2 disabled:bg-gray-100"
           />
 
@@ -475,20 +894,137 @@ export default function ProductionForm({
         </div>
       </div>
 
-      {/* Materials */}
+      {/* AUTOMATIC REQUIREMENT */}
+
+      {standardRequirement && (
+        <div className="rounded-lg border bg-gray-50 p-5">
+          <h3 className="text-sm font-bold">
+            Standard Requirement for{" "}
+            {Number(
+              quantity
+            ).toLocaleString()}{" "}
+            Blocks
+          </h3>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+
+            {/* CEMENT */}
+
+            <div className="rounded-lg bg-white p-3">
+              <p className="text-xs text-gray-500">
+                Cement
+              </p>
+
+              <p className="mt-1 font-semibold">
+                {standardRequirement.cementBags.toFixed(
+                  2
+                )}{" "}
+                bags
+              </p>
+            </div>
+
+            {/* QUARRY DUST */}
+
+            <div className="rounded-lg bg-white p-3">
+              <p className="text-xs text-gray-500">
+                Quarry Dust
+              </p>
+
+              <p className="mt-1 font-semibold">
+                {standardRequirement.quarryDustWheelbarrows.toFixed(
+                  2
+                )}{" "}
+                wheelbarrows
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                Inventory deduction:{" "}
+                {standardRequirement.quarryDustM3.toFixed(
+                  3
+                )}{" "}
+                m³
+              </p>
+            </div>
+
+            {/* CHIPPINGS */}
+
+            <div className="rounded-lg bg-white p-3">
+              <p className="text-xs text-gray-500">
+                Chippings
+              </p>
+
+              <p className="mt-1 font-semibold">
+                {standardRequirement.chippingsWheelbarrows.toFixed(
+                  2
+                )}{" "}
+                wheelbarrows
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                Inventory deduction:{" "}
+                {standardRequirement.chippingsM3.toFixed(
+                  3
+                )}{" "}
+                m³
+              </p>
+            </div>
+
+            {/* WATER */}
+
+            <div className="rounded-lg bg-white p-3">
+              <p className="text-xs text-gray-500">
+                Water Target
+              </p>
+
+              <p className="mt-1 font-semibold">
+                {standardRequirement.waterTarget.toFixed(
+                  2
+                )}{" "}
+                L
+              </p>
+
+              <p className="mt-1 text-xs text-gray-500">
+                Range:{" "}
+                {standardRequirement.waterMin.toFixed(
+                  2
+                )}
+                –
+                {standardRequirement.waterMax.toFixed(
+                  2
+                )}{" "}
+                L
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={applyStandardRecipe}
+            disabled={loading}
+            className="mt-4 rounded-lg border border-blue-300 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Apply Standard Recipe
+          </button>
+        </div>
+      )}
+
+      {/* ACTUAL MATERIAL INPUTS */}
+
       <div>
         <h3 className="mb-3 text-sm font-bold">
-          Materials Used
+          Actual Materials Used
         </h3>
 
         <div className="grid gap-4 md:grid-cols-2">
-          {/* Cement */}
+
+          {/* CEMENT */}
+
           <div className="space-y-2">
             <label
               htmlFor="production-cement"
               className="block text-sm font-semibold"
             >
-              Cement
+              Cement Used
             </label>
 
             <div className="relative">
@@ -505,6 +1041,7 @@ export default function ProductionForm({
                 }
                 disabled={loading}
                 placeholder="e.g. 1"
+                required
                 className="w-full rounded-lg border px-3 py-2.5 pr-16 text-sm outline-none focus:ring-2 disabled:bg-gray-100"
               />
 
@@ -514,89 +1051,23 @@ export default function ProductionForm({
             </div>
 
             <p className="text-xs text-gray-500">
-              Current price: GH₵75.00 / bag
+              Current inventory cost:{" "}
+              {costsLoading
+                ? "Loading..."
+                : `GH₵${cementCostPerBag.toFixed(
+                    2
+                  )} / bag`}
             </p>
           </div>
 
-          {/* Chippings */}
-          <div className="space-y-2">
-            <label
-              htmlFor="production-chippings"
-              className="block text-sm font-semibold"
-            >
-              Chippings
-            </label>
+          {/* WATER */}
 
-            <div className="relative">
-              <input
-                id="production-chippings"
-                type="number"
-                min="0"
-                step="0.01"
-                value={chippingsUsed}
-                onChange={(event) =>
-                  setChippingsUsed(
-                    event.target.value
-                  )
-                }
-                disabled={loading}
-                placeholder="e.g. 0.20"
-                className="w-full rounded-lg border px-3 py-2.5 pr-16 text-sm outline-none focus:ring-2 disabled:bg-gray-100"
-              />
-
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">
-                m³
-              </span>
-            </div>
-
-            <p className="text-xs text-gray-500">
-              Current price: GH₵235.00 / m³
-            </p>
-          </div>
-
-          {/* Quarry Dust */}
-          <div className="space-y-2">
-            <label
-              htmlFor="production-quarry-dust"
-              className="block text-sm font-semibold"
-            >
-              Quarry Dust
-            </label>
-
-            <div className="relative">
-              <input
-                id="production-quarry-dust"
-                type="number"
-                min="0"
-                step="0.01"
-                value={quarryDustUsed}
-                onChange={(event) =>
-                  setQuarryDustUsed(
-                    event.target.value
-                  )
-                }
-                disabled={loading}
-                placeholder="e.g. 0.60"
-                className="w-full rounded-lg border px-3 py-2.5 pr-16 text-sm outline-none focus:ring-2 disabled:bg-gray-100"
-              />
-
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">
-                m³
-              </span>
-            </div>
-
-            <p className="text-xs text-gray-500">
-              Current price: GH₵235.00 / m³
-            </p>
-          </div>
-
-          {/* Water */}
           <div className="space-y-2">
             <label
               htmlFor="production-water"
               className="block text-sm font-semibold"
             >
-              Water
+              Water Used
             </label>
 
             <div className="relative">
@@ -612,7 +1083,8 @@ export default function ProductionForm({
                   )
                 }
                 disabled={loading}
-                placeholder="e.g. 80"
+                placeholder="e.g. 27.5"
+                required
                 className="w-full rounded-lg border px-3 py-2.5 pr-16 text-sm outline-none focus:ring-2 disabled:bg-gray-100"
               />
 
@@ -622,19 +1094,67 @@ export default function ProductionForm({
             </div>
 
             <p className="text-xs text-gray-500">
-              Current price: GH₵0.50 / L
+              Current inventory cost:{" "}
+              {costsLoading
+                ? "Loading..."
+                : `GH₵${waterCostPerLitre.toFixed(
+                    2
+                  )} / L`}
+            </p>
+          </div>
+        </div>
+
+        {/* AUTOMATIC AGGREGATES */}
+
+        <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm font-semibold text-blue-900">
+            Quarry Dust and Chippings are
+            calculated automatically.
+          </p>
+
+          <p className="mt-1 text-xs text-blue-700">
+            The operator does not enter m³.
+            The ERP uses the official
+            wheelbarrow recipe and converts the
+            quantities to m³ for inventory and
+            costing.
+          </p>
+
+          <div className="mt-3 grid gap-2 text-sm">
+            <p>
+              Quarry Dust cost:{" "}
+              <strong>
+                {costsLoading
+                  ? "Loading..."
+                  : `GH₵${quarryDustCostPerM3.toFixed(
+                      2
+                    )} / m³`}
+              </strong>
+            </p>
+
+            <p>
+              Chippings cost:{" "}
+              <strong>
+                {costsLoading
+                  ? "Loading..."
+                  : `GH₵${chippingsCostPerM3.toFixed(
+                      2
+                    )} / m³`}
+              </strong>
             </p>
           </div>
         </div>
       </div>
 
-      {/* Cost Preview */}
+      {/* COST PREVIEW */}
+
       <div className="rounded-xl border bg-gray-50 p-5">
         <h3 className="text-sm font-bold">
           Production Cost Preview
         </h3>
 
         <div className="mt-4 space-y-3">
+
           <div className="flex justify-between">
             <span className="text-sm text-gray-600">
               Cement
@@ -642,18 +1162,7 @@ export default function ProductionForm({
 
             <span className="font-medium">
               GH₵
-              {costPreview.cementCost.toFixed(2)}
-            </span>
-          </div>
-
-          <div className="flex justify-between">
-            <span className="text-sm text-gray-600">
-              Chippings
-            </span>
-
-            <span className="font-medium">
-              GH₵
-              {costPreview.chippingsCost.toFixed(
+              {costPreview.cementCost.toFixed(
                 2
               )}
             </span>
@@ -674,12 +1183,27 @@ export default function ProductionForm({
 
           <div className="flex justify-between">
             <span className="text-sm text-gray-600">
+              Chippings
+            </span>
+
+            <span className="font-medium">
+              GH₵
+              {costPreview.chippingsCost.toFixed(
+                2
+              )}
+            </span>
+          </div>
+
+          <div className="flex justify-between">
+            <span className="text-sm text-gray-600">
               Water
             </span>
 
             <span className="font-medium">
               GH₵
-              {costPreview.waterCost.toFixed(2)}
+              {costPreview.waterCost.toFixed(
+                2
+              )}
             </span>
           </div>
 
@@ -691,7 +1215,9 @@ export default function ProductionForm({
 
               <span className="text-lg font-bold">
                 GH₵
-                {costPreview.totalCost.toFixed(2)}
+                {costPreview.totalCost.toFixed(
+                  2
+                )}
               </span>
             </div>
 
@@ -711,7 +1237,8 @@ export default function ProductionForm({
         </div>
       </div>
 
-      {/* Actions */}
+      {/* SUBMIT */}
+
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <button
           type="button"
@@ -724,7 +1251,7 @@ export default function ProductionForm({
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={cannotRecord}
           className="rounded-lg bg-black px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading

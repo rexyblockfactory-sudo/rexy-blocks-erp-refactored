@@ -1,162 +1,144 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
-  getInventory,
-} from "@/services/inventory";
-import {
-  getInventoryMovements,
-  recordInventoryMovement,
-} from "@/services/inventory-movements";
-import type { InventoryItem } from "@/types/inventory";
-import type {
-  InventoryMovement,
-  InventoryMovementType,
-} from "@/types/inventory-movement";
+  ArrowLeft,
+  ArrowDown,
+  ArrowUp,
+  History,
+  Loader2,
+  Package,
+  Plus,
+} from "lucide-react";
 
-const movementTypes: {
-  value: InventoryMovementType;
-  label: string;
-  direction: "in" | "out";
-}[] = [
-  {
-    value: "opening_stock",
-    label: "Opening Stock",
-    direction: "in",
-  },
-  {
-    value: "increase",
-    label: "Stock Increase",
-    direction: "in",
-  },
-  {
-    value: "decrease",
-    label: "Stock Decrease",
-    direction: "out",
-  },
-  {
-    value: "damaged",
-    label: "Damaged Blocks",
-    direction: "out",
-  },
-  {
-    value: "broken",
-    label: "Broken Blocks",
-    direction: "out",
-  },
-  {
-    value: "wastage",
-    label: "Wastage",
-    direction: "out",
-  },
-  {
-    value: "correction",
-    label: "Correction",
-    direction: "in",
-  },
-  {
-    value: "other",
-    label: "Other",
-    direction: "in",
-  },
-];
+import { supabase } from "@/lib/supabase/client";
 
-function movementLabel(
-  type: InventoryMovementType
-) {
+interface InventoryItem {
+  id: string;
+  item_name: string;
+  category: string | null;
+  unit: string | null;
+  quantity: number | string | null;
+}
+
+interface InventoryMovement {
+  id: string;
+  inventory_id: string;
+  item_name: string;
+  movement_type: string;
+  quantity: number | string;
+  reason: string | null;
+  created_at: string;
+}
+
+function number(value: unknown): number {
+  const result = Number(value);
+
+  return Number.isFinite(result) ? result : 0;
+}
+
+function formatMovementType(type: string): string {
+  const movementTypes: Record<string, string> = {
+    opening_stock: "Opening Stock",
+    increase: "Stock Increase",
+    purchase: "Purchase",
+    production_consumption: "Production Consumption",
+    decrease: "Stock Decrease",
+    adjustment_in: "Stock Adjustment In",
+    adjustment_out: "Stock Adjustment Out",
+    sale: "Sale",
+    transfer_in: "Transfer In",
+    transfer_out: "Transfer Out",
+  };
+
   return (
-    movementTypes.find(
-      (item) => item.value === type
-    )?.label || type
+    movementTypes[type] ||
+    type
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase())
   );
 }
 
-function movementDirection(
-  type: InventoryMovementType
-) {
-  const item = movementTypes.find(
-    (entry) => entry.value === type
-  );
+function isStockOutMovement(type: string): boolean {
+  return [
+    "production_consumption",
+    "decrease",
+    "adjustment_out",
+    "sale",
+    "transfer_out",
+  ].includes(type);
+}
 
-  return item?.direction || "in";
+function isStockInMovement(type: string): boolean {
+  return [
+    "opening_stock",
+    "increase",
+    "purchase",
+    "adjustment_in",
+    "transfer_in",
+  ].includes(type);
+}
+
+function formatDate(dateString: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(dateString));
+  } catch {
+    return dateString;
+  }
 }
 
 export default function InventoryMovementsPage() {
-  const [inventory, setInventory] =
-    useState<InventoryItem[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [movements, setMovements] = useState<InventoryMovement[]>([]);
 
-  const [movements, setMovements] =
-    useState<InventoryMovement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const [inventoryId, setInventoryId] =
-    useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  const [movementType, setMovementType] =
-    useState<InventoryMovementType>(
-      "increase"
-    );
-
-  const [quantity, setQuantity] =
-    useState("");
-
-  const [reason, setReason] =
-    useState("");
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [saving, setSaving] =
-    useState(false);
-
-  const [message, setMessage] =
-    useState("");
-
-  const [errorMessage, setErrorMessage] =
-    useState("");
+  const [inventoryId, setInventoryId] = useState("");
+  const [movementType, setMovementType] = useState("increase");
+  const [quantity, setQuantity] = useState("");
+  const [reason, setReason] = useState("");
 
   async function loadData() {
-    setLoading(true);
-    setErrorMessage("");
-
     try {
-      const [
-        inventoryResult,
-        movementsResult,
-      ] = await Promise.all([
-        getInventory(),
-        getInventoryMovements(),
+      setLoading(true);
+      setError(null);
+
+      const [inventoryResult, movementsResult] = await Promise.all([
+        supabase
+          .from("inventory")
+          .select("*")
+          .order("item_name", { ascending: true }),
+
+        supabase
+          .from("inventory_movements")
+          .select("*")
+          .order("created_at", { ascending: false }),
       ]);
 
       if (inventoryResult.error) {
-        throw new Error(
-          inventoryResult.error.message
-        );
+        throw inventoryResult.error;
       }
 
       if (movementsResult.error) {
-        throw new Error(
-          movementsResult.error.message
-        );
+        throw movementsResult.error;
       }
 
-      setInventory(
-        (inventoryResult.data ||
-          []) as InventoryItem[]
-      );
+      setInventory(inventoryResult.data || []);
+      setMovements(movementsResult.data || []);
+    } catch (err) {
+      console.error("Failed to load inventory movements:", err);
 
-      setMovements(
-        (movementsResult.data ||
-          []) as InventoryMovement[]
-      );
-    } catch (error) {
-      console.error(
-        "Inventory movements error:",
-        error
-      );
-
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
+      setError(
+        err instanceof Error
+          ? err.message
           : "Failed to load inventory movements."
       );
     } finally {
@@ -168,69 +150,108 @@ export default function InventoryMovementsPage() {
     loadData();
   }, []);
 
-  async function submitMovement(
+  const selectedInventoryItem = useMemo(() => {
+    return inventory.find((item) => item.id === inventoryId);
+  }, [inventory, inventoryId]);
+
+  async function handleSubmit(
     event: React.FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
 
-    setSaving(true);
-    setMessage("");
-    setErrorMessage("");
-
-    const parsedQuantity =
-      Number(quantity);
+    setError(null);
+    setSuccess(null);
 
     if (!inventoryId) {
-      setErrorMessage(
-        "Please select an inventory item."
-      );
-      setSaving(false);
+      setError("Please select an inventory item.");
       return;
     }
 
-    if (
-      !Number.isFinite(
-        parsedQuantity
-      ) ||
-      parsedQuantity <= 0
-    ) {
-      setErrorMessage(
-        "Quantity must be greater than zero."
-      );
-      setSaving(false);
+    const movementQuantity = number(quantity);
+
+    if (movementQuantity <= 0) {
+      setError("Please enter a quantity greater than zero.");
+      return;
+    }
+
+    if (!selectedInventoryItem) {
+      setError("Selected inventory item was not found.");
       return;
     }
 
     try {
-      const result =
-        await recordInventoryMovement({
-          inventory_id: inventoryId,
-          movement_type: movementType,
-          quantity: parsedQuantity,
-          reason,
-        });
+      setSaving(true);
 
-      if (result.error) {
-        throw result.error;
-      }
-
-      setMessage(
-        "Inventory movement recorded successfully."
+      const currentQuantity = number(
+        selectedInventoryItem.quantity
       );
 
+      const stockOut = isStockOutMovement(
+        movementType
+      );
+
+      const newQuantity = stockOut
+        ? currentQuantity - movementQuantity
+        : currentQuantity + movementQuantity;
+
+      if (newQuantity < 0) {
+        setError(
+          `Insufficient stock. Current stock is ${currentQuantity} ${
+            selectedInventoryItem.unit || ""
+          }.`
+        );
+
+        return;
+      }
+
+      const { error: movementError } =
+        await supabase
+          .from("inventory_movements")
+          .insert({
+            inventory_id: inventoryId,
+            item_name: selectedInventoryItem.item_name,
+            movement_type: movementType,
+            quantity: movementQuantity,
+            reason:
+              reason.trim() ||
+              formatMovementType(movementType),
+          });
+
+      if (movementError) {
+        throw movementError;
+      }
+
+      const { error: inventoryError } =
+        await supabase
+          .from("inventory")
+          .update({
+            quantity: newQuantity,
+          })
+          .eq("id", inventoryId);
+
+      if (inventoryError) {
+        throw inventoryError;
+      }
+
+      setSuccess(
+        `${selectedInventoryItem.item_name} stock updated successfully.`
+      );
+
+      setInventoryId("");
+      setMovementType("increase");
       setQuantity("");
       setReason("");
 
       await loadData();
-    } catch (error) {
+    } catch (err) {
       console.error(
-        "Save inventory movement error:",
-        error
+        "Failed to record inventory movement:",
+        err
       );
 
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
+      setError(
+        err instanceof Error
+          ? err.message
           : "Failed to record inventory movement."
       );
     } finally {
@@ -238,298 +259,470 @@ export default function InventoryMovementsPage() {
     }
   }
 
+  const totalStockIn = useMemo(() => {
+    return movements
+      .filter((movement) =>
+        isStockInMovement(movement.movement_type)
+      )
+      .reduce(
+        (total, movement) =>
+          total + number(movement.quantity),
+        0
+      );
+  }, [movements]);
+
+  const totalStockOut = useMemo(() => {
+    return movements
+      .filter((movement) =>
+        isStockOutMovement(movement.movement_type)
+      )
+      .reduce(
+        (total, movement) =>
+          total + number(movement.quantity),
+        0
+      );
+  }, [movements]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading inventory movements...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <main className="space-y-8 p-6">
+    <div className="space-y-8 p-4 md:p-8">
+      {/* PAGE HEADER */}
 
-      <div>
-        <h1 className="text-3xl font-bold">
-          Stock Movements
-        </h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="mb-2">
+            <Link
+              href="/inventory"
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Inventory
+            </Link>
+          </div>
 
-        <p className="mt-1 text-gray-600">
-          Record and audit manual inventory
-          adjustments.
-        </p>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Stock Movements
+          </h1>
+
+          <p className="mt-2 text-muted-foreground">
+            Record and audit inventory movements.
+          </p>
+        </div>
+
+        <Link
+          href="/inventory/history"
+          className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted"
+        >
+          <History className="h-4 w-4" />
+          Inventory History
+        </Link>
       </div>
 
-      {message && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
-          {message}
+      {/* SUMMARY CARDS */}
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-xl border bg-card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                Total Movements
+              </p>
+
+              <p className="mt-2 text-3xl font-bold">
+                {movements.length}
+              </p>
+            </div>
+
+            <Package className="h-8 w-8 text-muted-foreground" />
+          </div>
         </div>
-      )}
 
-      {errorMessage && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-          {errorMessage}
+        <div className="rounded-xl border bg-card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                Stock In
+              </p>
+
+              <p className="mt-2 text-3xl font-bold">
+                {totalStockIn.toLocaleString()}
+              </p>
+            </div>
+
+            <ArrowUp className="h-8 w-8 text-muted-foreground" />
+          </div>
         </div>
-      )}
 
-      <section className="rounded-lg border bg-white p-6 shadow-sm">
+        <div className="rounded-xl border bg-card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                Stock Out
+              </p>
 
-        <h2 className="mb-5 text-xl font-bold">
-          Record Stock Movement
-        </h2>
+              <p className="mt-2 text-3xl font-bold">
+                {totalStockOut.toLocaleString()}
+              </p>
+            </div>
+
+            <ArrowDown className="h-8 w-8 text-muted-foreground" />
+          </div>
+        </div>
+      </div>
+
+      {/* RECORD MOVEMENT FORM */}
+
+      <div className="rounded-xl border bg-card">
+        <div className="border-b p-6">
+          <div className="flex items-center gap-2">
+            <Plus className="h-5 w-5" />
+
+            <div>
+              <h2 className="text-xl font-semibold">
+                Record Stock Movement
+              </h2>
+
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add stock increases or record stock reductions.
+              </p>
+            </div>
+          </div>
+        </div>
 
         <form
-          onSubmit={submitMovement}
-          className="grid gap-5 md:grid-cols-2"
+          onSubmit={handleSubmit}
+          className="space-y-5 p-6"
         >
+          {error && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm">
+              {error}
+            </div>
+          )}
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold">
-              Inventory Item
-            </label>
+          {success && (
+            <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4 text-sm">
+              {success}
+            </div>
+          )}
 
-            <select
-              value={inventoryId}
-              onChange={(event) =>
-                setInventoryId(
-                  event.target.value
-                )
-              }
-              className="w-full rounded-lg border px-3 py-2"
-              required
-            >
-              <option value="">
-                Select inventory item
-              </option>
+          <div className="grid gap-5 md:grid-cols-2">
+            {/* INVENTORY ITEM */}
 
-              {inventory.map((item) => (
-                <option
-                  key={item.id}
-                  value={item.id}
-                >
-                  {item.item_name} — Current:
-                  {" "}
-                  {Number(
-                    item.quantity
-                  ).toLocaleString()}
+            <div className="space-y-2">
+              <label
+                htmlFor="inventory-item"
+                className="text-sm font-medium"
+              >
+                Inventory Item
+              </label>
+
+              <select
+                id="inventory-item"
+                value={inventoryId}
+                onChange={(event) =>
+                  setInventoryId(event.target.value)
+                }
+                className="w-full rounded-lg border bg-background px-3 py-2"
+              >
+                <option value="">
+                  Select inventory item
                 </option>
-              ))}
-            </select>
-          </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold">
-              Movement Type
-            </label>
-
-            <select
-              value={movementType}
-              onChange={(event) =>
-                setMovementType(
-                  event.target
-                    .value as InventoryMovementType
-                )
-              }
-              className="w-full rounded-lg border px-3 py-2"
-            >
-              {movementTypes.map(
-                (type) => (
+                {inventory.map((item) => (
                   <option
-                    key={type.value}
-                    value={type.value}
+                    key={item.id}
+                    value={item.id}
                   >
-                    {type.label}
+                    {item.item_name} — Current:{" "}
+                    {number(
+                      item.quantity
+                    ).toLocaleString()}{" "}
+                    {item.unit || ""}
                   </option>
-                )
-              )}
-            </select>
+                ))}
+              </select>
+            </div>
+
+            {/* MOVEMENT TYPE */}
+
+            <div className="space-y-2">
+              <label
+                htmlFor="movement-type"
+                className="text-sm font-medium"
+              >
+                Movement Type
+              </label>
+
+              <select
+                id="movement-type"
+                value={movementType}
+                onChange={(event) =>
+                  setMovementType(event.target.value)
+                }
+                className="w-full rounded-lg border bg-background px-3 py-2"
+              >
+                <option value="increase">
+                  Stock Increase
+                </option>
+
+                <option value="purchase">
+                  Purchase
+                </option>
+
+                <option value="decrease">
+                  Stock Decrease
+                </option>
+
+                <option value="adjustment_in">
+                  Stock Adjustment In
+                </option>
+
+                <option value="adjustment_out">
+                  Stock Adjustment Out
+                </option>
+              </select>
+            </div>
+
+            {/* QUANTITY */}
+
+            <div className="space-y-2">
+              <label
+                htmlFor="quantity"
+                className="text-sm font-medium"
+              >
+                Quantity
+              </label>
+
+              <input
+                id="quantity"
+                type="number"
+                min="0"
+                step="any"
+                value={quantity}
+                onChange={(event) =>
+                  setQuantity(event.target.value)
+                }
+                placeholder="Enter quantity"
+                className="w-full rounded-lg border bg-background px-3 py-2"
+              />
+            </div>
+
+            {/* REASON */}
+
+            <div className="space-y-2">
+              <label
+                htmlFor="reason"
+                className="text-sm font-medium"
+              >
+                Reason
+              </label>
+
+              <input
+                id="reason"
+                type="text"
+                value={reason}
+                onChange={(event) =>
+                  setReason(event.target.value)
+                }
+                placeholder="Optional reason"
+                className="w-full rounded-lg border bg-background px-3 py-2"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold">
-              Quantity
-            </label>
-
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value={quantity}
-              onChange={(event) =>
-                setQuantity(
-                  event.target.value
-                )
-              }
-              className="w-full rounded-lg border px-3 py-2"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-semibold">
-              Reason
-            </label>
-
-            <input
-              type="text"
-              value={reason}
-              onChange={(event) =>
-                setReason(
-                  event.target.value
-                )
-              }
-              placeholder="e.g. Broken blocks during loading"
-              className="w-full rounded-lg border px-3 py-2"
-            />
-          </div>
-
-          <div className="md:col-span-2">
-
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-black px-5 py-2.5 font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
-            >
-              {saving
-                ? "Recording..."
-                : "Record Movement"}
-            </button>
-
-          </div>
-
+          <button
+            type="submit"
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" />
+                Record Movement
+              </>
+            )}
+          </button>
         </form>
+      </div>
 
-      </section>
+      {/* MOVEMENT HISTORY */}
 
-      <section className="rounded-lg border bg-white shadow-sm">
-
-        <div className="border-b p-5">
-
-          <h2 className="text-xl font-bold">
+      <div className="rounded-xl border bg-card">
+        <div className="border-b p-6">
+          <h2 className="text-xl font-semibold">
             Movement History
           </h2>
 
-          <p className="mt-1 text-sm text-gray-500">
-            Every manual inventory movement
-            is recorded here.
+          <p className="mt-1 text-sm text-muted-foreground">
+            Every inventory movement is recorded here.
           </p>
-
         </div>
 
-        {loading ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/40">
+              <tr>
+                <th className="px-6 py-4 text-left font-medium">
+                  Date
+                </th>
 
-          <div className="p-10 text-center">
-            Loading movements...
-          </div>
+                <th className="px-6 py-4 text-left font-medium">
+                  Item
+                </th>
 
-        ) : movements.length ===
-          0 ? (
+                <th className="px-6 py-4 text-left font-medium">
+                  Movement
+                </th>
 
-          <div className="p-10 text-center text-gray-500">
-            No inventory movements have
-            been recorded.
-          </div>
+                <th className="px-6 py-4 text-right font-medium">
+                  Quantity
+                </th>
 
-        ) : (
+                <th className="px-6 py-4 text-left font-medium">
+                  Reason
+                </th>
+              </tr>
+            </thead>
 
-          <div className="overflow-x-auto">
-
-            <table className="min-w-full">
-
-              <thead className="bg-gray-50">
-
+            <tbody>
+              {movements.length === 0 ? (
                 <tr>
-
-                  <th className="border-b p-3 text-left text-sm font-semibold">
-                    Date
-                  </th>
-
-                  <th className="border-b p-3 text-left text-sm font-semibold">
-                    Product
-                  </th>
-
-                  <th className="border-b p-3 text-left text-sm font-semibold">
-                    Movement
-                  </th>
-
-                  <th className="border-b p-3 text-right text-sm font-semibold">
-                    Quantity
-                  </th>
-
-                  <th className="border-b p-3 text-left text-sm font-semibold">
-                    Reason
-                  </th>
-
+                  <td
+                    colSpan={5}
+                    className="px-6 py-12 text-center text-muted-foreground"
+                  >
+                    No inventory movements recorded yet.
+                  </td>
                 </tr>
+              ) : (
+                movements.map((movement) => {
+                  const stockOut =
+                    isStockOutMovement(
+                      movement.movement_type
+                    );
 
-              </thead>
+                  const movementQuantity =
+                    number(movement.quantity);
 
-              <tbody>
+                  const inventoryItem =
+                    inventory.find(
+                      (item) =>
+                        item.id ===
+                        movement.inventory_id
+                    );
 
-                {movements.map(
-                  (movement) => {
-                    const direction =
-                      movementDirection(
-                        movement.movement_type
-                      );
+                  const unit =
+                    inventoryItem?.unit || "";
 
-                    return (
-                      <tr
-                        key={
-                          movement.id
-                        }
-                        className="border-b last:border-b-0"
-                      >
+                  return (
+                    <tr
+                      key={movement.id}
+                      className="border-b last:border-b-0 hover:bg-muted/30"
+                    >
+                      {/* DATE */}
 
-                        <td className="whitespace-nowrap p-3">
-                          {new Date(
-                            movement.created_at
-                          ).toLocaleString(
-                            "en-GH"
-                          )}
-                        </td>
+                      <td className="whitespace-nowrap px-6 py-4">
+                        {formatDate(
+                          movement.created_at
+                        )}
+                      </td>
 
-                        <td className="p-3 font-semibold">
-                          {
-                            movement.item_name
-                          }
-                        </td>
+                      {/* ITEM */}
 
-                        <td className="p-3">
-                          {movementLabel(
-                            movement.movement_type
-                          )}
-                        </td>
+                      <td className="px-6 py-4 font-medium">
+                        {movement.item_name}
+                      </td>
 
-                        <td
-                          className={`p-3 text-right font-semibold ${
-                            direction ===
-                            "in"
-                              ? "text-green-600"
-                              : "text-red-600"
+                      {/* MOVEMENT TYPE */}
+
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
+                            stockOut
+                              ? "bg-red-500/10 text-red-700 dark:text-red-400"
+                              : "bg-green-500/10 text-green-700 dark:text-green-400"
                           }`}
                         >
-                          {direction ===
-                          "in"
-                            ? "+"
-                            : "-"}
-                          {Number(
-                            movement.quantity
-                          ).toLocaleString()}
-                        </td>
+                          {formatMovementType(
+                            movement.movement_type
+                          )}
+                        </span>
+                      </td>
 
-                        <td className="p-3">
-                          {movement.reason ||
-                            "—"}
-                        </td>
+                      {/* QUANTITY */}
 
-                      </tr>
-                    );
-                  }
-                )}
+                      <td className="whitespace-nowrap px-6 py-4 text-right font-semibold">
+                        <span
+                          className={
+                            stockOut
+                              ? "text-red-600 dark:text-red-400"
+                              : "text-green-600 dark:text-green-400"
+                          }
+                        >
+                          {stockOut ? "-" : "+"}
+                          {movementQuantity.toLocaleString()}{" "}
+                          {unit}
+                        </span>
+                      </td>
 
-              </tbody>
+                      {/* REASON */}
 
-            </table>
+                      <td className="px-6 py-4 text-muted-foreground">
+                        {movement.reason || "—"}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-          </div>
+      {/* IMPORTANT NOTE */}
 
-        )}
+      <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
+        <strong className="text-foreground">
+          Inventory movement rules:
+        </strong>
 
-      </section>
+        <ul className="mt-3 list-disc space-y-1 pl-5">
+          <li>
+            Opening stock, purchases and stock increases
+            add inventory.
+          </li>
 
-    </main>
+          <li>
+            Production consumption, decreases and stock
+            adjustments out reduce inventory.
+          </li>
+
+          <li>
+            Production consumption is automatically recorded
+            when blocks are produced.
+          </li>
+
+          <li>
+            Manual movements should not duplicate production
+            consumption records.
+          </li>
+        </ul>
+      </div>
+    </div>
   );
 }

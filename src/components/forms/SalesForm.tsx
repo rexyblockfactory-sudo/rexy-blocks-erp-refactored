@@ -94,19 +94,15 @@ export default function SalesForm() {
         // --------------------------------------------------------
 
         if (customersResult.error) {
-          console.error(
-            "Customers error:",
-            {
-              message:
-                customersResult.error.message,
-              details:
-                customersResult.error.details,
-              hint:
-                customersResult.error.hint,
-              code:
-                customersResult.error.code,
-            }
-          );
+         console.error(
+  "Customers error:",
+  customersResult.error
+);
+
+console.error(
+  "Customer error message:",
+  customersResult.error?.message
+);
 
           setErrorMessage(
             customersResult.error.message ||

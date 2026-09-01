@@ -4,15 +4,39 @@ import type {
   InventoryMovement,
 } from "@/types/inventory-movement";
 
-export async function getInventoryMovements() {
-  return supabase
+export async function getInventoryMovements(): Promise<{
+  data: InventoryMovement[] | null;
+  error: Error | null;
+}> {
+  const { data, error } = await supabase
     .from("inventory_movements")
     .select("*")
     .order("created_at", {
       ascending: false,
     });
-}
 
+  if (error) {
+    console.error(
+      "getInventoryMovements error:",
+      {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      }
+    );
+
+    return {
+      data: null,
+      error: new Error(error.message),
+    };
+  }
+
+  return {
+    data: (data || []) as InventoryMovement[],
+    error: null,
+  };
+}
 export async function recordInventoryMovement(
   input: CreateInventoryMovementInput
 ): Promise<{
@@ -68,25 +92,29 @@ export async function recordInventoryMovement(
     );
 
   if (error) {
-    console.error(
-      "record_inventory_movement error:",
-      error
-    );
-
-    return {
-      data: null,
-      error: new Error(error.message),
-    };
-  }
-
-  if (!data) {
-    return {
-      data: null,
-      error: new Error(
-        "Inventory movement was recorded, but no movement was returned."
+  console.error(
+    "record_inventory_movement error:",
+    {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+      stringified: JSON.stringify(
+        error,
+        Object.getOwnPropertyNames(error)
       ),
-    };
-  }
+    }
+  );
+
+  return {
+    data: null,
+    error: new Error(
+      error.message ||
+        error.details ||
+        "Failed to record inventory movement."
+    ),
+  };
+}
 
   return {
     data: data as InventoryMovement,
