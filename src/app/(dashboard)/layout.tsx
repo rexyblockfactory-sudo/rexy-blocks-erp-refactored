@@ -96,6 +96,16 @@ const navigation: NavSection[] = [
       },
     ],
   },
+
+  {
+    label: "Payroll",
+    items: [
+      {
+        label: "Payroll & Labour",
+        href: "/payroll",
+      },
+    ],
+  },
 ];
 
 function isActivePath(
@@ -161,6 +171,10 @@ function getPageTitle(
 
   if (pathname.startsWith("/invoices")) {
     return "Invoices";
+  }
+
+  if (pathname.startsWith("/payroll")) {
+    return "Payroll & Labour";
   }
 
   return "Rexy Blocks Factory";

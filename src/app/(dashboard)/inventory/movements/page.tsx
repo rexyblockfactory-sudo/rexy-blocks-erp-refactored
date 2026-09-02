@@ -40,13 +40,16 @@ function number(value: unknown): number {
 
 function formatMovementType(type: string): string {
   const movementTypes: Record<string, string> = {
+    IN: "Stock IN",
+    OUT: "Stock OUT",
+    adjustment: "Stock Adjustment",
+    adjustment_in: "Stock Adjustment In",
+    adjustment_out: "Stock Adjustment Out",
     opening_stock: "Opening Stock",
     increase: "Stock Increase",
     purchase: "Purchase",
     production_consumption: "Production Consumption",
     decrease: "Stock Decrease",
-    adjustment_in: "Stock Adjustment In",
-    adjustment_out: "Stock Adjustment Out",
     sale: "Sale",
     transfer_in: "Transfer In",
     transfer_out: "Transfer Out",
@@ -62,6 +65,7 @@ function formatMovementType(type: string): string {
 
 function isStockOutMovement(type: string): boolean {
   return [
+    "OUT",
     "production_consumption",
     "decrease",
     "adjustment_out",
@@ -72,6 +76,7 @@ function isStockOutMovement(type: string): boolean {
 
 function isStockInMovement(type: string): boolean {
   return [
+    "IN",
     "opening_stock",
     "increase",
     "purchase",
@@ -102,7 +107,7 @@ export default function InventoryMovementsPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [inventoryId, setInventoryId] = useState("");
-  const [movementType, setMovementType] = useState("increase");
+  const [movementType, setMovementType] = useState("IN");
   const [quantity, setQuantity] = useState("");
   const [reason, setReason] = useState("");
 
@@ -182,55 +187,60 @@ export default function InventoryMovementsPage() {
     try {
       setSaving(true);
 
-      const currentQuantity = number(
-        selectedInventoryItem.quantity
-      );
+      let rpcMovementType = movementType;
+      let rpcQuantity = movementQuantity;
 
-      const stockOut = isStockOutMovement(
-        movementType
-      );
+      // ADJUSTMENT means "set stock to this quantity".
+      if (movementType === "adjustment") {
+        const currentQuantity = number(selectedInventoryItem.quantity);
+        const difference = movementQuantity - currentQuantity;
 
-      const newQuantity = stockOut
-        ? currentQuantity - movementQuantity
-        : currentQuantity + movementQuantity;
+        if (difference === 0) {
+          setError("The adjustment quantity is the same as the current stock.");
+          return;
+        }
 
-      if (newQuantity < 0) {
-        setError(
-          `Insufficient stock. Current stock is ${currentQuantity} ${
-            selectedInventoryItem.unit || ""
-          }.`
+        rpcMovementType =
+          difference > 0 ? "adjustment_in" : "adjustment_out";
+
+        rpcQuantity = Math.abs(difference);
+      }
+
+      const { data: movementData, error: movementError } =
+        await supabase.rpc(
+          "record_inventory_movement",
+          {
+            p_inventory_id: inventoryId,
+            p_movement_type: rpcMovementType,
+            p_quantity: rpcQuantity,
+            p_reason:
+              reason.trim() ||
+              formatMovementType(rpcMovementType),
+          }
         );
 
-        return;
-      }
-
-      const { error: movementError } =
-        await supabase
-          .from("inventory_movements")
-          .insert({
-            inventory_id: inventoryId,
-            item_name: selectedInventoryItem.item_name,
-            movement_type: movementType,
-            quantity: movementQuantity,
-            reason:
-              reason.trim() ||
-              formatMovementType(movementType),
-          });
-
       if (movementError) {
-        throw movementError;
+        const details = [
+          movementError.message,
+          movementError.details,
+          movementError.hint,
+          movementError.code
+            ? `Code: ${movementError.code}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" | ");
+
+        throw new Error(
+          details ||
+            "Supabase could not record the inventory movement."
+        );
       }
 
-      const { error: inventoryError } =
-        await supabase
-          .from("inventory")
-          .update({
-            quantity: newQuantity,
-          })
-          .eq("id", inventoryId);
-
-      if (inventoryError) {
-        throw inventoryError;
+      if (!movementData) {
+        throw new Error(
+          "Inventory movement was not recorded. No data was returned."
+        );
       }
 
       setSuccess(
@@ -238,22 +248,30 @@ export default function InventoryMovementsPage() {
       );
 
       setInventoryId("");
-      setMovementType("increase");
+      setMovementType("IN");
       setQuantity("");
       setReason("");
 
       await loadData();
     } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : err &&
+              typeof err === "object" &&
+              "message" in err
+            ? String((err as { message?: unknown }).message)
+            : typeof err === "string"
+              ? err
+              : "Failed to record inventory movement.";
+
       console.error(
         "Failed to record inventory movement:",
+        message,
         err
       );
 
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to record inventory movement."
-      );
+      setError(message);
     } finally {
       setSaving(false);
     }
@@ -393,7 +411,7 @@ export default function InventoryMovementsPage() {
               </h2>
 
               <p className="mt-1 text-sm text-muted-foreground">
-                Add stock increases or record stock reductions.
+                Record Stock IN, Stock OUT, or adjust an item to its actual physical quantity.
               </p>
             </div>
           </div>
@@ -471,24 +489,16 @@ export default function InventoryMovementsPage() {
                 }
                 className="w-full rounded-lg border bg-background px-3 py-2"
               >
-                <option value="increase">
-                  Stock Increase
+                <option value="IN">
+                  Stock IN
                 </option>
 
-                <option value="purchase">
-                  Purchase
+                <option value="OUT">
+                  Stock OUT
                 </option>
 
-                <option value="decrease">
-                  Stock Decrease
-                </option>
-
-                <option value="adjustment_in">
-                  Stock Adjustment In
-                </option>
-
-                <option value="adjustment_out">
-                  Stock Adjustment Out
+                <option value="adjustment">
+                  Stock Adjustment (set current stock)
                 </option>
               </select>
             </div>
@@ -512,7 +522,11 @@ export default function InventoryMovementsPage() {
                 onChange={(event) =>
                   setQuantity(event.target.value)
                 }
-                placeholder="Enter quantity"
+                placeholder={
+                  movementType === "adjustment"
+                    ? "Enter the new total stock quantity"
+                    : "Enter quantity"
+                }
                 className="w-full rounded-lg border bg-background px-3 py-2"
               />
             </div>

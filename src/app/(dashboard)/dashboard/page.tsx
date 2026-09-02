@@ -85,6 +85,17 @@ interface StockAlert {
   minimum_quantity: number | null;
 }
 
+interface FinishedGoodsInventory {
+  id: string;
+  product_name: string;
+  quantity: number | null;
+  unit_cost: number | null;
+  total_cost: number | null;
+  costed_quantity: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 interface MonthlyProductionRecord {
   id: string;
   quantity: number | null;
@@ -432,6 +443,26 @@ export default function DashboardPage() {
           .select("*");
 
         /* ------------------------------------
+           FINISHED GOODS INVENTORY
+        ------------------------------------ */
+
+        const {
+          data: finishedGoodsData,
+          error: finishedGoodsError,
+        } = await supabase
+          .from("finished_goods_inventory")
+          .select(`
+            id,
+            product_name,
+            quantity,
+            unit_cost,
+            total_cost,
+            costed_quantity,
+            created_at,
+            updated_at
+          `);
+
+        /* ------------------------------------
            STOCK ALERTS
         ------------------------------------ */
 
@@ -562,6 +593,13 @@ export default function DashboardPage() {
           );
         }
 
+        if (finishedGoodsError) {
+          console.error(
+            "Dashboard finished goods error:",
+            finishedGoodsError
+          );
+        }
+
         if (alertsError) {
           console.error(
             "Dashboard alerts error:",
@@ -594,8 +632,15 @@ export default function DashboardPage() {
            NORMALIZE DATA
         ------------------------------------ */
 
+        // Prefer the full sales query for financial totals.
+        // Fall back to the recent-sales query if the full query
+        // returns no rows while recent sales are available.
         const saleRows =
-          (allSales || []) as Sale[];
+          (
+            (allSales && allSales.length > 0)
+              ? allSales
+              : (recentSalesData || [])
+          ) as Sale[];
 
         const monthlySaleRows =
           (
@@ -606,6 +651,11 @@ export default function DashboardPage() {
           (
             inventory || []
           ) as InventoryItem[];
+
+        const finishedGoodsRows =
+          (
+            finishedGoodsData || []
+          ) as FinishedGoodsInventory[];
 
         const alertRows =
           (
@@ -672,23 +722,19 @@ export default function DashboardPage() {
             : 0;
 
         /* ------------------------------------
-           PRODUCTION TOTAL
+           AVAILABLE FINISHED BLOCKS
 
-           Latest 5 records only.
+           Current physical stock comes from
+           finished_goods_inventory. Historical
+           production remains separate for the
+           monthly chart and ProductionHistory.
         ------------------------------------ */
 
         const totalProduction =
-          (
-            recentProductionData || []
-          ).reduce(
-            (
-              sum,
-              item
-            ) =>
+          finishedGoodsRows.reduce(
+            (sum, item) =>
               sum +
-              Number(
-                item.quantity || 0
-              ),
+              Number(item.quantity || 0),
             0
           );
 
@@ -1039,6 +1085,26 @@ export default function DashboardPage() {
           }
         );
 
+        // Finished goods are stored in their own table.
+        // Do not depend on the raw inventory table for block stock.
+        finishedValue +=
+          finishedGoodsRows.reduce(
+            (sum, item) =>
+              sum +
+              Number(item.total_cost ?? (Number(item.quantity || 0) * Number(item.unit_cost || 0))),
+            0
+          );
+
+        finishedCount +=
+          finishedGoodsRows.length;
+
+        const finishedGoodsUncosted =
+          finishedGoodsRows.filter(
+            (item) =>
+              Number(item.quantity || 0) > 0 &&
+              Number(item.unit_cost || 0) <= 0
+          ).length;
+
         const blockInventory =
           inventoryRows.filter(
             (item) =>
@@ -1058,7 +1124,7 @@ export default function DashboardPage() {
               Number(
                 item.unit_cost || 0
               ) <= 0
-          ).length;
+          ).length + finishedGoodsUncosted;
 
         /* ------------------------------------
            UPDATE STATE
@@ -1077,7 +1143,10 @@ export default function DashboardPage() {
         );
 
         setProductCount(
-          inventoryRows.length
+          Math.max(
+            inventoryRows.length,
+            finishedGoodsRows.length
+          )
         );
 
         setLowStockCount(
@@ -1372,15 +1441,20 @@ export default function DashboardPage() {
     );
 
   if (loading) {
-    return (
-      <main className="space-y-8 p-6">
-        <div className="rounded-lg border bg-white p-8 text-center">
-          <p className="text-sm text-gray-500">
-            Loading dashboard...
-          </p>
-        </div>
-      </main>
-    );
+   return (
+  <main
+    className="min-h-screen bg-cover bg-center bg-fixed bg-no-repeat"
+    style={{
+      backgroundImage: "url('/minimalist-geometric-designs-backgrounds.jpg')",
+    }}
+  >
+    <div className="min-h-screen space-y-8 bg-white/80 p-6 backdrop-blur-[2px]">
+
+      {/* KEEP ALL YOUR EXISTING DASHBOARD CONTENT HERE */}
+
+    </div>
+  </main>
+);
   }
 
   return (
