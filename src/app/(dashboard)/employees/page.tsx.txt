@@ -1,0 +1,459 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
+type Employee = {
+  id: string;
+  full_name: string;
+  job_title: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  payment_type: string;
+  salary: number;
+  employment_start_date: string | null;
+  status: string;
+  created_at: string;
+};
+
+const initialForm = {
+  full_name: "",
+  job_title: "",
+  phone: "",
+  email: "",
+  address: "",
+  payment_type: "Monthly",
+  salary: "",
+  employment_start_date: "",
+  status: "Active",
+};
+
+export default function EmployeesPage() {
+  const router = useRouter();
+
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [form, setForm] = useState(initialForm);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    checkAccessAndLoad();
+  }, []);
+
+  async function checkAccessAndLoad() {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.role?.toLowerCase() !== "admin") {
+      router.replace("/dashboard");
+      return;
+    }
+
+    setIsAdmin(true);
+
+    const { data, error } = await supabase
+      .from("employees")
+      .select("*")
+      .order("created_at", {
+        ascending: false,
+      });
+
+    if (error) throw error;
+
+    setEmployees(data || []);
+  } catch (error) {
+    console.error("Employee loading error:", error);
+    setMessage("Failed to load employees.");
+  } finally {
+    setLoading(false);
+  }
+}
+
+  async function handleSubmit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    if (!form.full_name.trim() || !form.job_title.trim()) {
+      setMessage("Full name and job title are required.");
+      return;
+    }
+
+    setSaving(true);
+    setMessage("");
+
+    try {
+      const supabase = createClient();
+
+      const { error } = await supabase
+        .from("employees")
+        .insert({
+          full_name: form.full_name.trim(),
+          job_title: form.job_title.trim(),
+          phone: form.phone.trim() || null,
+          email: form.email.trim() || null,
+          address: form.address.trim() || null,
+          payment_type: form.payment_type,
+          salary: Number(form.salary || 0),
+          employment_start_date:
+            form.employment_start_date || null,
+          status: form.status,
+        });
+
+      if (error) throw error;
+
+      setForm(initialForm);
+      setMessage("Employee added successfully.");
+
+      await checkAccessAndLoad();
+    } catch (error: any) {
+      console.error("Employee creation error:", error);
+
+      setMessage(
+        error?.message ||
+          "Failed to add employee."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className="p-6 lg:p-10">
+        <div className="rounded-xl bg-white p-6 shadow-lg">
+          Loading employees...
+        </div>
+      </main>
+    );
+  }
+
+  if (!isAdmin) {
+    return null;
+  }
+
+  return (
+    <main className="p-4 lg:p-10">
+      <div className="mx-auto max-w-7xl space-y-8">
+
+        <div className="rounded-2xl bg-white p-6 shadow-xl">
+          <h1 className="text-2xl font-bold">
+            Employees
+          </h1>
+
+          <p className="mt-2 text-gray-600">
+            Manage Rexy Blocks Factory employees and staff.
+          </p>
+        </div>
+
+        {message && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+            {message}
+          </div>
+        )}
+
+        <div className="rounded-2xl bg-white p-6 shadow-xl">
+          <h2 className="mb-6 text-xl font-bold">
+            Add New Employee
+          </h2>
+
+          <form
+            onSubmit={handleSubmit}
+            className="grid gap-5 md:grid-cols-2"
+          >
+            <div>
+              <label className="mb-2 block text-sm font-semibold">
+                Full Name *
+              </label>
+
+              <input
+                required
+                value={form.full_name}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    full_name: e.target.value,
+                  })
+                }
+                className="w-full rounded-lg border p-3"
+                placeholder="Employee full name"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold">
+                Job Title *
+              </label>
+
+              <input
+                required
+                value={form.job_title}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    job_title: e.target.value,
+                  })
+                }
+                className="w-full rounded-lg border p-3"
+                placeholder="Factory Manager"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold">
+                Phone
+              </label>
+
+              <input
+                value={form.phone}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    phone: e.target.value,
+                  })
+                }
+                className="w-full rounded-lg border p-3"
+                placeholder="+233..."
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold">
+                Email
+              </label>
+
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    email: e.target.value,
+                  })
+                }
+                className="w-full rounded-lg border p-3"
+                placeholder="employee@email.com"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold">
+                Payment Type
+              </label>
+
+              <select
+                value={form.payment_type}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    payment_type: e.target.value,
+                  })
+                }
+                className="w-full rounded-lg border p-3"
+              >
+                <option value="Monthly">
+                  Monthly
+                </option>
+
+                <option value="Daily">
+                  Daily
+                </option>
+
+                <option value="Per Bag">
+                  Per Bag
+                </option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold">
+                Salary / Rate
+              </label>
+
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.salary}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    salary: e.target.value,
+                  })
+                }
+                className="w-full rounded-lg border p-3"
+                placeholder="2500"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold">
+                Start Date
+              </label>
+
+              <input
+                type="date"
+                value={form.employment_start_date}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    employment_start_date:
+                      e.target.value,
+                  })
+                }
+                className="w-full rounded-lg border p-3"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold">
+                Status
+              </label>
+
+              <select
+                value={form.status}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    status: e.target.value,
+                  })
+                }
+                className="w-full rounded-lg border p-3"
+              >
+                <option value="Active">
+                  Active
+                </option>
+
+                <option value="Inactive">
+                  Inactive
+                </option>
+              </select>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-sm font-semibold">
+                Address
+              </label>
+
+              <input
+                value={form.address}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    address: e.target.value,
+                  })
+                }
+                className="w-full rounded-lg border p-3"
+                placeholder="Kumasi, Ghana"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-lg bg-black px-6 py-3 font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
+              >
+                {saving
+                  ? "Adding Employee..."
+                  : "Add Employee"}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div className="rounded-2xl bg-white p-6 shadow-xl">
+          <h2 className="mb-6 text-xl font-bold">
+            Employee List ({employees.length})
+          </h2>
+
+          {employees.length === 0 ? (
+            <p className="text-gray-500">
+              No employees have been added yet.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] border-collapse">
+                <thead>
+                  <tr className="border-b bg-gray-50 text-left">
+                    <th className="p-3">Name</th>
+                    <th className="p-3">Position</th>
+                    <th className="p-3">Phone</th>
+                    <th className="p-3">Email</th>
+                    <th className="p-3">Payment</th>
+                    <th className="p-3">Salary</th>
+                    <th className="p-3">Status</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {employees.map((employee) => (
+                    <tr
+                      key={employee.id}
+                      className="border-b"
+                    >
+                      <td className="p-3 font-medium">
+                        {employee.full_name}
+                      </td>
+
+                      <td className="p-3">
+                        {employee.job_title}
+                      </td>
+
+                      <td className="p-3">
+                        {employee.phone || "-"}
+                      </td>
+
+                      <td className="p-3">
+                        {employee.email || "-"}
+                      </td>
+
+                      <td className="p-3">
+                        {employee.payment_type}
+                      </td>
+
+                      <td className="p-3">
+                        GH₵
+                        {Number(
+                          employee.salary || 0
+                        ).toLocaleString()}
+                      </td>
+
+                      <td className="p-3">
+                        <span
+                          className={
+                            employee.status === "Active"
+                              ? "font-semibold text-green-600"
+                              : "font-semibold text-gray-500"
+                          }
+                        >
+                          {employee.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}
