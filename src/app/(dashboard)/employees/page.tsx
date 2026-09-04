@@ -619,45 +619,60 @@ export default function EmployeesPage() {
           {/* JOB TITLE */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium">
-              Job Title *
-            </label>
+  <label className="mb-2 block text-sm font-medium">
+    Job Title *
+  </label>
 
-            <input
-              type="text"
-              value={form.job_title}
-              onChange={(event) =>
-                updateForm(
-                  "job_title",
-                  event.target.value
-                )
-              }
-              placeholder="Manager, Operator, Worker"
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-gray-900"
-              required
-            />
-          </div>
+  <select
+    value={form.job_title}
+    onChange={(event) =>
+      updateForm("job_title", event.target.value)
+    }
+    className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-gray-900"
+    required
+  >
+    <option value="">Select Job Title</option>
+    <option value="Manager">Manager</option>
+    <option value="Factory Supervisor">Factory Supervisor</option>
+    <option value="Machine Operator">Machine Operator</option>
+    <option value="Block Machine Operator">Block Machine Operator</option>
+    <option value="Production Worker">Production Worker</option>
+    <option value="General Worker">General Worker</option>
+    <option value="Driver">Driver</option>
+    <option value="Sales Officer">Sales Officer</option>
+    <option value="Accountant">Accountant</option>
+    <option value="Storekeeper">Storekeeper</option>
+    <option value="Security Guard">Security Guard</option>
+  </select>
+</div>
 
           {/* ROLE */}
 
           <div>
-            <label className="mb-2 block text-sm font-medium">
-              Role
-            </label>
+  <label className="mb-2 block text-sm font-medium">
+    Role
+  </label>
 
-            <input
-              type="text"
-              value={form.role}
-              onChange={(event) =>
-                updateForm(
-                  "role",
-                  event.target.value
-                )
-              }
-              placeholder="Manager, Staff, Worker"
-              className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-gray-900"
-            />
-          </div>
+  <select
+    value={form.role}
+    onChange={(event) =>
+      updateForm("role", event.target.value)
+    }
+    className="w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-gray-900"
+  >
+    <option value="">Select Role</option>
+    <option value="Admin">Admin</option>
+    <option value="Manager">Manager</option>
+    <option value="Supervisor">Supervisor</option>
+    <option value="Operator">Operator</option>
+    <option value="Worker">Worker</option>
+    <option value="Sales">Sales</option>
+    <option value="Finance">Finance</option>
+    <option value="Inventory">Inventory</option>
+    <option value="Driver">Driver</option>
+    <option value="Security">Security</option>
+  </select>
+</div>
 
           {/* PHONE */}
 
