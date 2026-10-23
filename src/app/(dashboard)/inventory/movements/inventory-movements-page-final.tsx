@@ -1,0 +1,795 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  ArrowDown,
+  ArrowUp,
+  History,
+  Loader2,
+  Package,
+  Plus,
+} from "lucide-react";
+
+import { supabase } from "@/lib/supabase/client";
+
+interface InventoryItem {
+  id: string;
+  item_name: string;
+  category: string | null;
+  unit: string | null;
+  quantity: number | string | null;
+}
+
+interface InventoryMovement {
+  id: string;
+  inventory_id: string;
+  item_name: string;
+  movement_type: string;
+  quantity: number | string;
+  reason: string | null;
+  created_at: string;
+}
+
+function number(value: unknown): number {
+  const result = Number(value);
+
+  return Number.isFinite(result) ? result : 0;
+}
+
+function formatMovementType(type: string): string {
+  const movementTypes: Record<string, string> = {
+    IN: "Stock IN",
+    OUT: "Stock OUT",
+    adjustment: "Stock Adjustment",
+    adjustment_in: "Stock Adjustment In",
+    adjustment_out: "Stock Adjustment Out",
+    opening_stock: "Opening Stock",
+    increase: "Stock Increase",
+    purchase: "Purchase",
+    production_consumption: "Production Consumption",
+    decrease: "Stock Decrease",
+    sale: "Sale",
+    transfer_in: "Transfer In",
+    transfer_out: "Transfer Out",
+  };
+
+  return (
+    movementTypes[type] ||
+    type
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase())
+  );
+}
+
+function isStockOutMovement(type: string): boolean {
+  return [
+    "OUT",
+    "production_consumption",
+    "decrease",
+    "adjustment_out",
+    "sale",
+    "transfer_out",
+  ].includes(type);
+}
+
+function isStockInMovement(type: string): boolean {
+  return [
+    "IN",
+    "opening_stock",
+    "increase",
+    "purchase",
+    "adjustment_in",
+    "transfer_in",
+  ].includes(type);
+}
+
+function formatDate(dateString: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(dateString));
+  } catch {
+    return dateString;
+  }
+}
+
+function getQuantityStep(unit: string | null): string {
+  switch ((unit || "").trim().toLowerCase()) {
+    case "bag":
+      return "1";
+    case "cubic metre":
+      return "0.01";
+    case "litre":
+      return "0.01";
+    default:
+      return "0.01";
+  }
+}
+
+function isWholeUnit(unit: string | null): boolean {
+  return (unit || "").trim().toLowerCase() === "bag";
+}
+
+export default function InventoryMovementsPage() {
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [movements, setMovements] = useState<InventoryMovement[]>([]);
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const [inventoryId, setInventoryId] = useState("");
+  const [movementType, setMovementType] = useState("IN");
+  const [quantity, setQuantity] = useState("");
+  const [reason, setReason] = useState("");
+
+  async function loadData() {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [inventoryResult, movementsResult] = await Promise.all([
+        supabase
+          .from("inventory")
+          .select("*")
+          .order("item_name", { ascending: true }),
+
+        supabase
+          .from("inventory_movements")
+          .select("*")
+          .order("created_at", { ascending: false }),
+      ]);
+
+      if (inventoryResult.error) {
+        throw inventoryResult.error;
+      }
+
+      if (movementsResult.error) {
+        throw movementsResult.error;
+      }
+
+      setInventory(inventoryResult.data || []);
+      setMovements(movementsResult.data || []);
+    } catch (err) {
+      console.error("Failed to load inventory movements:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to load inventory movements."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const selectedInventoryItem = useMemo(() => {
+    return inventory.find((item) => item.id === inventoryId);
+  }, [inventory, inventoryId]);
+
+  async function handleSubmit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    setError(null);
+    setSuccess(null);
+
+    if (!inventoryId) {
+      setError("Please select an inventory item.");
+      return;
+    }
+
+    const movementQuantity = number(quantity);
+
+    if (movementQuantity <= 0) {
+      setError("Please enter a quantity greater than zero.");
+      return;
+    }
+
+    if (!selectedInventoryItem) {
+      setError("Selected inventory item was not found.");
+      return;
+    }
+
+    if (isWholeUnit(selectedInventoryItem.unit) && !Number.isInteger(movementQuantity)) {
+      setError("Cement bags must be entered as whole bags.");
+      return;
+    }
+
+    if (movementType === "OUT" || movementType === "adjustment") {
+      if (!reason.trim()) {
+        setError("A reason is required for Stock OUT and stock adjustments.");
+        return;
+      }
+    }
+
+    try {
+      setSaving(true);
+
+      let rpcMovementType = movementType;
+      let rpcQuantity = movementQuantity;
+
+      // ADJUSTMENT means "set stock to this quantity".
+      if (movementType === "adjustment") {
+        const currentQuantity = number(selectedInventoryItem.quantity);
+        const difference = movementQuantity - currentQuantity;
+
+        if (difference === 0) {
+          setError("The adjustment quantity is the same as the current stock.");
+          return;
+        }
+
+        rpcMovementType =
+          difference > 0 ? "adjustment_in" : "adjustment_out";
+
+        rpcQuantity = Math.abs(difference);
+      }
+
+      const { data: movementData, error: movementError } =
+        await supabase.rpc(
+          "record_inventory_movement",
+          {
+            p_inventory_id: inventoryId,
+            p_movement_type: rpcMovementType,
+            p_quantity: rpcQuantity,
+            p_reason:
+              reason.trim() ||
+              formatMovementType(rpcMovementType),
+          }
+        );
+
+      if (movementError) {
+        const details = [
+          movementError.message,
+          movementError.details,
+          movementError.hint,
+          movementError.code
+            ? `Code: ${movementError.code}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" | ");
+
+        throw new Error(
+          details ||
+            "Supabase could not record the inventory movement."
+        );
+      }
+
+      if (!movementData) {
+        throw new Error(
+          "Inventory movement was not recorded. No data was returned."
+        );
+      }
+
+      setSuccess(
+        `${selectedInventoryItem.item_name} stock updated successfully.`
+      );
+
+      setInventoryId("");
+      setMovementType("IN");
+      setQuantity("");
+      setReason("");
+
+      await loadData();
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : err &&
+              typeof err === "object" &&
+              "message" in err
+            ? String((err as { message?: unknown }).message)
+            : typeof err === "string"
+              ? err
+              : "Failed to record inventory movement.";
+
+      console.error(
+        "Failed to record inventory movement:",
+        message,
+        err
+      );
+
+      setError(message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const totalStockIn = useMemo(() => {
+    return movements
+      .filter((movement) =>
+        isStockInMovement(movement.movement_type)
+      )
+      .reduce(
+        (total, movement) =>
+          total + number(movement.quantity),
+        0
+      );
+  }, [movements]);
+
+  const totalStockOut = useMemo(() => {
+    return movements
+      .filter((movement) =>
+        isStockOutMovement(movement.movement_type)
+      )
+      .reduce(
+        (total, movement) =>
+          total + number(movement.quantity),
+        0
+      );
+  }, [movements]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading inventory movements...</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8 p-4 md:p-8">
+      {/* PAGE HEADER */}
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="mb-2">
+            <Link
+              href="/inventory"
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Inventory
+            </Link>
+          </div>
+
+          <h1 className="text-3xl font-bold tracking-tight">
+            Stock Movements
+          </h1>
+
+          <p className="mt-2 text-muted-foreground">
+            Record and audit inventory movements.
+          </p>
+        </div>
+
+        <Link
+          href="/inventory/history"
+          className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted"
+        >
+          <History className="h-4 w-4" />
+          Inventory History
+        </Link>
+      </div>
+
+      {/* SUMMARY CARDS */}
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-xl border bg-card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                Total Movements
+              </p>
+
+              <p className="mt-2 text-3xl font-bold">
+                {movements.length}
+              </p>
+            </div>
+
+            <Package className="h-8 w-8 text-muted-foreground" />
+          </div>
+        </div>
+
+        <div className="rounded-xl border bg-card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                Stock In
+              </p>
+
+              <p className="mt-2 text-3xl font-bold">
+                {totalStockIn.toLocaleString()}
+              </p>
+            </div>
+
+            <ArrowUp className="h-8 w-8 text-muted-foreground" />
+          </div>
+        </div>
+
+        <div className="rounded-xl border bg-card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                Stock Out
+              </p>
+
+              <p className="mt-2 text-3xl font-bold">
+                {totalStockOut.toLocaleString()}
+              </p>
+            </div>
+
+            <ArrowDown className="h-8 w-8 text-muted-foreground" />
+          </div>
+        </div>
+      </div>
+
+      {/* RECORD MOVEMENT FORM */}
+
+      <div className="rounded-xl border bg-card">
+        <div className="border-b p-6">
+          <div className="flex items-center gap-2">
+            <Plus className="h-5 w-5" />
+
+            <div>
+              <h2 className="text-xl font-semibold">
+                Record Stock Movement
+              </h2>
+
+              <p className="mt-1 text-sm text-muted-foreground">
+                All changes are recorded and applied by one atomic database transaction.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-5 p-6"
+        >
+          {error && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4 text-sm">
+              {success}
+            </div>
+          )}
+
+          <div className="grid gap-5 md:grid-cols-2">
+            {/* INVENTORY ITEM */}
+
+            <div className="space-y-2">
+              <label
+                htmlFor="inventory-item"
+                className="text-sm font-medium"
+              >
+                Inventory Item
+              </label>
+
+              <select
+                id="inventory-item"
+                value={inventoryId}
+                onChange={(event) =>
+                  setInventoryId(event.target.value)
+                }
+                className="w-full rounded-lg border bg-background px-3 py-2"
+              >
+                <option value="">
+                  Select inventory item
+                </option>
+
+                {inventory.map((item) => (
+                  <option
+                    key={item.id}
+                    value={item.id}
+                  >
+                    {item.item_name} — Current:{" "}
+                    {number(
+                      item.quantity
+                    ).toLocaleString()}{" "}
+                    {item.unit || ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* MOVEMENT TYPE */}
+
+            <div className="space-y-2">
+              <label
+                htmlFor="movement-type"
+                className="text-sm font-medium"
+              >
+                Movement Type
+              </label>
+
+              <select
+                id="movement-type"
+                value={movementType}
+                onChange={(event) =>
+                  setMovementType(event.target.value)
+                }
+                className="w-full rounded-lg border bg-background px-3 py-2"
+              >
+                <option value="IN">
+                  Stock IN
+                </option>
+
+                <option value="OUT">
+                  Stock OUT
+                </option>
+
+                <option value="adjustment">
+                  Stock Adjustment (set current stock)
+                </option>
+              </select>
+            </div>
+
+            {/* QUANTITY */}
+
+            <div className="space-y-2">
+              <label
+                htmlFor="quantity"
+                className="text-sm font-medium"
+              >
+                Quantity
+              </label>
+
+              <input
+                id="quantity"
+                type="number"
+                min={isWholeUnit(selectedInventoryItem?.unit || null) ? "1" : "0.01"}
+                step={getQuantityStep(selectedInventoryItem?.unit || null)}
+                value={quantity}
+                onChange={(event) =>
+                  setQuantity(event.target.value)
+                }
+                placeholder={
+                  movementType === "adjustment"
+                    ? "Enter the new total stock quantity"
+                    : "Enter quantity"
+                }
+                className="w-full rounded-lg border bg-background px-3 py-2"
+              />
+            </div>
+
+            {/* REASON */}
+
+            <div className="space-y-2">
+              <label
+                htmlFor="reason"
+                className="text-sm font-medium"
+              >
+                Reason
+              </label>
+
+              <input
+                id="reason"
+                type="text"
+                value={reason}
+                onChange={(event) =>
+                  setReason(event.target.value)
+                }
+                placeholder="Optional reason"
+                className="w-full rounded-lg border bg-background px-3 py-2"
+              />
+            </div>
+          </div>
+
+          {selectedInventoryItem && quantity && Number.isFinite(number(quantity)) && number(quantity) > 0 && (
+            <div className="rounded-lg border bg-muted/30 p-4 text-sm">
+              {(() => {
+                const current = number(selectedInventoryItem.quantity);
+                const entered = number(quantity);
+                const next =
+                  movementType === "OUT"
+                    ? current - entered
+                    : movementType === "IN"
+                      ? current + entered
+                      : entered;
+
+                return (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span>
+                      Current stock: <strong>{current.toLocaleString()} {selectedInventoryItem.unit || ""}</strong>
+                    </span>
+                    <span>
+                      New stock: <strong>{next.toLocaleString()} {selectedInventoryItem.unit || ""}</strong>
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" />
+                Record Movement
+              </>
+            )}
+          </button>
+        </form>
+      </div>
+
+      {/* MOVEMENT HISTORY */}
+
+      <div className="rounded-xl border bg-card">
+        <div className="border-b p-6">
+          <h2 className="text-xl font-semibold">
+            Movement History
+          </h2>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            Every inventory movement is recorded here.
+          </p>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/40">
+              <tr>
+                <th className="px-6 py-4 text-left font-medium">
+                  Date
+                </th>
+
+                <th className="px-6 py-4 text-left font-medium">
+                  Item
+                </th>
+
+                <th className="px-6 py-4 text-left font-medium">
+                  Movement
+                </th>
+
+                <th className="px-6 py-4 text-right font-medium">
+                  Quantity
+                </th>
+
+                <th className="px-6 py-4 text-left font-medium">
+                  Reason
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {movements.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-6 py-12 text-center text-muted-foreground"
+                  >
+                    No inventory movements recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                movements.map((movement) => {
+                  const stockOut =
+                    isStockOutMovement(
+                      movement.movement_type
+                    );
+
+                  const movementQuantity =
+                    number(movement.quantity);
+
+                  const inventoryItem =
+                    inventory.find(
+                      (item) =>
+                        item.id ===
+                        movement.inventory_id
+                    );
+
+                  const unit =
+                    inventoryItem?.unit || "";
+
+                  return (
+                    <tr
+                      key={movement.id}
+                      className="border-b last:border-b-0 hover:bg-muted/30"
+                    >
+                      {/* DATE */}
+
+                      <td className="whitespace-nowrap px-6 py-4">
+                        {formatDate(
+                          movement.created_at
+                        )}
+                      </td>
+
+                      {/* ITEM */}
+
+                      <td className="px-6 py-4 font-medium">
+                        {movement.item_name}
+                      </td>
+
+                      {/* MOVEMENT TYPE */}
+
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
+                            stockOut
+                              ? "bg-red-500/10 text-red-700 dark:text-red-400"
+                              : "bg-green-500/10 text-green-700 dark:text-green-400"
+                          }`}
+                        >
+                          {formatMovementType(
+                            movement.movement_type
+                          )}
+                        </span>
+                      </td>
+
+                      {/* QUANTITY */}
+
+                      <td className="whitespace-nowrap px-6 py-4 text-right font-semibold">
+                        <span
+                          className={
+                            stockOut
+                              ? "text-red-600 dark:text-red-400"
+                              : "text-green-600 dark:text-green-400"
+                          }
+                        >
+                          {stockOut ? "-" : "+"}
+                          {movementQuantity.toLocaleString()}{" "}
+                          {unit}
+                        </span>
+                      </td>
+
+                      {/* REASON */}
+
+                      <td className="px-6 py-4 text-muted-foreground">
+                        {movement.reason || "—"}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* IMPORTANT NOTE */}
+
+      <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
+        <strong className="text-foreground">
+          Inventory movement rules:
+        </strong>
+
+        <ul className="mt-3 list-disc space-y-1 pl-5">
+          <li>
+            Stock IN adds inventory. Stock Adjustment sets the physical count and records the difference as an IN or OUT movement.
+          </li>
+
+          <li>
+            Stock OUT reduces inventory and cannot drive stock below zero.
+          </li>
+
+          <li>
+            Production consumption is automatically recorded
+            when blocks are produced.
+          </li>
+
+          <li>
+            Manual movements should not duplicate production
+            consumption records.
+          </li>
+        </ul>
+      </div>
+    </div>
+  );
+}

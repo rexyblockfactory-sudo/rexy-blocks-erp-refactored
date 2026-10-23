@@ -1,4 +1,5 @@
 "use client";
+import RawMaterialsManager from "@/components/inventory/RawMaterialsManager";
 
 import Link from "next/link";
 import {
@@ -542,54 +543,38 @@ export default function InventoryPage() {
                   .toLowerCase();
 
               switch (type) {
-                /* OPENING STOCK */
-
                 case "opening_stock":
-                  openingStock +=
-                    quantity;
+                  openingStock += quantity;
                   break;
 
-                /* STOCK INCREASE */
-
+                // Canonical database value is "IN"; normalize to lowercase above.
+                case "in":
                 case "increase":
-
                 case "stock_in":
-
                 case "purchase":
-
                 case "purchase_received":
-
                 case "adjustment_in":
-
-                  stockIncrease +=
-                    quantity;
+                  stockIncrease += quantity;
                   break;
-
-                /* PRODUCTION CONSUMPTION */
 
                 case "production_consumption":
-
-                  productionConsumption +=
-                    quantity;
+                  productionConsumption += quantity;
                   break;
 
-                /* STOCK DECREASE */
-
+                // Canonical database value is "OUT"; normalize to lowercase above.
+                case "out":
                 case "decrease":
-
                 case "stock_out":
-
                 case "adjustment_out":
-
-                  stockDecrease +=
-                    quantity;
+                  stockDecrease += quantity;
                   break;
 
                 default:
-
                   console.warn(
-                    "Unknown inventory movement:",
-                    type
+                    "Unknown inventory movement type:",
+                    movement.movement_type,
+                    "Movement ID:",
+                    movement.id
                   );
               }
             }
@@ -761,7 +746,6 @@ export default function InventoryPage() {
       </div>
     );
   }
-
   /* ========================================
      ERROR
   ======================================== */
@@ -786,6 +770,7 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-6 p-6">
+      <RawMaterialsManager />
 
       {/* ================================
           PAGE HEADER
@@ -1023,7 +1008,7 @@ export default function InventoryPage() {
               </th>
 
               <th className="p-4 text-right">
-                Calculated
+                Ledger / Production Calc.
               </th>
 
               <th className="p-4 text-right">
@@ -1196,32 +1181,34 @@ export default function InventoryPage() {
         </h2>
 
         <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-
           <p>
-            <strong>
-              Finished Products:
-            </strong>{" "}
-            Produced − Sold
+            <strong>Current Stock:</strong>{" "}
+            The quantity currently stored in the Supabase inventory table.
           </p>
 
           <p>
-            <strong>
-              Raw Materials:
-            </strong>{" "}
-            Opening Stock + Stock
-            Increases − Production
-            Consumption − Stock
-            Decreases
+            <strong>Finished Products:</strong>{" "}
+            Calculated as recorded production quantity minus recorded sales quantity.
           </p>
 
           <p>
-            <strong>
-              Difference:
-            </strong>{" "}
-            Current Database Stock −
-            Calculated Stock
+            <strong>Raw Materials:</strong>{" "}
+            Opening stock + stock increases (including IN and adjustment_in) −
+            production consumption − stock decreases (including OUT and adjustment_out).
           </p>
 
+          <p>
+            <strong>Ledger / Production Calc.:</strong>{" "}
+            A calculation from the movement, production, and sales records loaded by this page.
+            It is not a physical stock count and may differ from current stock if historical
+            transactions or opening balances are incomplete or inconsistent.
+          </p>
+
+          <p>
+            <strong>Difference:</strong>{" "}
+            Current Stock − Ledger / Production Calc. A non-zero result should be investigated;
+            it does not automatically mean the current physical stock is wrong.
+          </p>
         </div>
 
       </div>

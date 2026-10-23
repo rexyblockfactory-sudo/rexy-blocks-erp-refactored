@@ -55,6 +55,7 @@ const navigation: NavSection[] = [
       },
     ],
   },
+  
   {
     label: "Inventory",
     items: [
@@ -62,17 +63,13 @@ const navigation: NavSection[] = [
         label: "Inventory",
         href: "/inventory",
       },
-    ],
-  },
-  {
-    label: "Customers",
-    items: [
       {
-        label: "Customers",
-        href: "/customers",
+        label: "Receive Stock",
+        href: "/inventory/purchases",
       },
     ],
   },
+
   {
     label: "Products",
     items: [
