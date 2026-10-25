@@ -223,8 +223,17 @@ export default function InventoryPage() {
         ==================================== */
 
         if (inventoryResult.error) {
-          throw inventoryResult.error;
-        }
+  console.error("Inventory query failed:", {
+    message: inventoryResult.error.message,
+    details: inventoryResult.error.details,
+    hint: inventoryResult.error.hint,
+    code: inventoryResult.error.code,
+  });
+
+  throw new Error(
+    `Inventory query failed (${inventoryResult.error.code}): ${inventoryResult.error.message}`
+  );
+}
 
         /* ====================================
            PRODUCTION ERROR
