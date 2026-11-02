@@ -62,7 +62,7 @@ export default function WebsiteOrdersPage() {
       : "");
     setPaymentReference(""); setPaymentNotes("");
     setNotice("");
-  }, [selectedId, selected?.updated_at]);
+  }, [selected]);
 
   const quoteTotal = useMemo(() => Number(subtotal) + Number(delivery) + Number(additional), [subtotal, delivery, additional]);
   const depositDue = useMemo(() => Math.round(quoteTotal * Number(depositPercent)) / 100, [quoteTotal, depositPercent]);
@@ -85,6 +85,17 @@ export default function WebsiteOrdersPage() {
       setNotice("Quote saved. The order is now awaiting verified deposit payment.");
       await loadOrders();
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to save quote."); }
+    finally { setSaving(false); }
+  }
+
+  async function acceptOrder() {
+    if (!selected || saving) return;
+    setSaving(true); setError(""); setNotice("");
+    try {
+      await send(`/api/website-orders/${selected.id}/accept`, "POST", {});
+      setNotice("Order accepted and confirmed by management. It is still not an ERP sale until the separate conversion step is completed.");
+      await loadOrders();
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to accept order."); }
     finally { setSaving(false); }
   }
 
@@ -141,6 +152,11 @@ export default function WebsiteOrdersPage() {
             <div className="rounded-lg bg-emerald-50 p-3 text-sm"><div className="flex justify-between"><span>Total including all charges</span><strong>{money(quoteTotal)}</strong></div><div className="mt-1 flex justify-between"><span>Deposit due ({depositPercent || 0}%)</span><strong>{money(depositDue)}</strong></div></div>
             <button disabled={saving||!Number.isFinite(quoteTotal)||quoteTotal<=0||!Number.isFinite(depositDue)||depositDue<=0} className="w-full rounded-lg bg-gray-900 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Saving…" : "Save quote and request deposit"}</button>
           </form>}
+          {selected.status === "deposit_received" && <div className="space-y-3 border-t pt-5">
+            <h3 className="font-bold">Deposit verified — management acceptance required</h3>
+            <p className="text-sm text-gray-600">The required deposit has been recorded. An administrator or manager must now confirm that the factory accepts this order before it becomes Confirmed.</p>
+            <button type="button" onClick={() => void acceptOrder()} disabled={saving} className="w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Accepting…" : "Accept and confirm order"}</button>
+          </div>}
           {["awaiting_deposit","confirmed"].includes(selected.status) && <form onSubmit={recordPayment} className="space-y-3 border-t pt-5">
             <h3 className="font-bold">{selected.status === "confirmed" ? "Record balance payment" : "Verify customer payment"}</h3>
             <p className="text-xs text-gray-500">Only record money received and independently verified by authorised staff. Deposit required: {money(selected.deposit_required)}.</p>
