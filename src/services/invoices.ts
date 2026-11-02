@@ -12,6 +12,8 @@ export interface Invoice {
   quantity: number;
   unit_price: number;
   total_amount: number;
+  delivery_charge?: number;
+  additional_charges?: number;
   payment_status: string | null;
   sale_id: string | null;
   created_at: string;
@@ -51,6 +53,8 @@ function mapInvoice(
     quantity: Number(invoice.quantity || 0),
     unit_price: Number(invoice.unit_price || 0),
     total_amount: Number(invoice.total_amount || 0),
+    delivery_charge: Number(invoice.delivery_charge || 0),
+    additional_charges: Number(invoice.additional_charges || 0),
     payment_status: invoice.payment_status,
     sale_id: invoice.sale_id || null,
     created_at: invoice.created_at,
