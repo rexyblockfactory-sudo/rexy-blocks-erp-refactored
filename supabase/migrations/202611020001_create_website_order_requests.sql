@@ -159,7 +159,8 @@ using (
 -- Staff writes go through authenticated server routes using the server-only
 -- service-role client. No direct table UPDATE/INSERT grants are given to users.
 revoke all on public.website_order_payments from anon, authenticated;
-revoke all on public.website_order_requests from anon, authenticated;
+-- Keep the narrowly scoped anonymous INSERT grant established above.
+-- Authenticated users receive SELECT only; staff writes use server routes.
 grant select on public.website_order_requests to authenticated;
 grant select on public.website_order_payments to authenticated;
 
