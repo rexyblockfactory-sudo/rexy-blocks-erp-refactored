@@ -17,7 +17,7 @@ create table if not exists public.website_order_requests (
   customer_notes text null check (customer_notes is null or char_length(customer_notes) <= 1000),
 
   status text not null default 'pending_review'
-    check (status in ('pending_review', 'awaiting_deposit', 'confirmed', 'declined', 'cancelled', 'converted')),
+    check (status in ('pending_review', 'awaiting_deposit', 'deposit_received', 'confirmed', 'declined', 'cancelled', 'converted')),
 
   quoted_subtotal numeric(14,2) null check (quoted_subtotal is null or quoted_subtotal >= 0),
   delivery_charge numeric(14,2) null check (delivery_charge is null or delivery_charge >= 0),
@@ -30,6 +30,8 @@ create table if not exists public.website_order_requests (
 
   staff_notes text null check (staff_notes is null or char_length(staff_notes) <= 2000),
   deposit_verified_at timestamptz null,
+  accepted_at timestamptz null,
+  accepted_by uuid null references auth.users(id) on delete set null,
   sale_id uuid null references public.sales(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -44,7 +46,7 @@ create table if not exists public.website_order_requests (
   ),
   constraint website_order_confirm_requires_deposit check (
     status not in ('confirmed', 'converted')
-    or (deposit_required is not null and amount_paid >= deposit_required and deposit_verified_at is not null)
+    or (deposit_required is not null and amount_paid >= deposit_required and deposit_verified_at is not null and accepted_at is not null and accepted_by is not null)
   )
 );
 
@@ -235,7 +237,7 @@ begin
       else deposit_verified_at
     end,
     status = case
-      when v_total_paid >= deposit_required then 'confirmed'
+      when v_total_paid >= deposit_required then 'deposit_received'
       else 'awaiting_deposit'
     end
   where id = p_order_id
