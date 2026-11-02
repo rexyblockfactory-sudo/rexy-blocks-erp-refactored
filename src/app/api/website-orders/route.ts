@@ -25,7 +25,8 @@ export async function GET() {
       console.error("Website order list failed:", error);
       return NextResponse.json({ error: "Unable to load website order requests." }, { status: 500 });
     }
-    const orders = data ?? [];
+    type WebsiteOrderRow = Record<string, unknown> & { sale_id: string | null; amount_paid: number; balance_due: number; invoice_number?: string | null };
+    const orders = (data ?? []) as WebsiteOrderRow[];
     const saleIds = orders.map((order) => order.sale_id).filter((id): id is string => Boolean(id));
     if (saleIds.length) {
       const [{ data: sales }, { data: invoices }] = await Promise.all([
