@@ -11,6 +11,8 @@ interface Invoice {
   quantity: number;
   unit_price: number;
   total_amount: number;
+  delivery_charge?: number;
+  additional_charges?: number;
   payment_method: string;
   created_at: string;
 }
@@ -70,6 +72,10 @@ export default function InvoicesPage() {
                 </th>
 
                 <th className="p-3 text-left">
+                  Delivery / Other
+                </th>
+
+                <th className="p-3 text-left">
                   Payment Method
                 </th>
               </tr>
@@ -79,7 +85,7 @@ export default function InvoicesPage() {
               {invoices.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="p-4 text-center"
                   >
                     No invoices found.
@@ -110,6 +116,10 @@ export default function InvoicesPage() {
                     <td className="p-3">
                       GH₵
                       {invoice.total_amount.toLocaleString()}
+                    </td>
+
+                    <td className="p-3">
+                      GH₵{(Number(invoice.delivery_charge ?? 0) + Number(invoice.additional_charges ?? 0)).toLocaleString("en-GH", { minimumFractionDigits: 2 })}
                     </td>
 
                     <td className="p-3">
