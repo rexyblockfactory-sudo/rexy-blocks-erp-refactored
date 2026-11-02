@@ -32,7 +32,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         subtotal < 0 || delivery < 0 || additional < 0 ||
         depositPercent <= 0 || depositPercent > 100 ||
         staffNotes.length > 2000) {
-      return NextResponse.json({ error: "Enter valid quote amounts and a deposit percentage between 0 and 100." }, { status: 400 });
+      return NextResponse.json({ error: "Enter a positive blocks subtotal, valid charges and a deposit percentage between 0 and 100." }, { status: 400 });
     }
 
     const total = Math.round((subtotal + delivery + additional) * 100) / 100;
