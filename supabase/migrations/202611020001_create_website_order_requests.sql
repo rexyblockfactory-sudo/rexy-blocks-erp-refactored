@@ -250,3 +250,227 @@ $$;
 
 revoke all on function public.record_website_order_payment(uuid, numeric, text, text, text, uuid) from public, anon, authenticated;
 grant execute on function public.record_website_order_payment(uuid, numeric, text, text, text, uuid) to service_role;
+
+
+-- Preserve negotiated order charges separately in the ERP sale and invoice.
+alter table public.sales
+  add column if not exists delivery_charge numeric(14,2) not null default 0,
+  add column if not exists additional_charges numeric(14,2) not null default 0;
+
+alter table public.invoices
+  add column if not exists delivery_charge numeric(14,2) not null default 0,
+  add column if not exists additional_charges numeric(14,2) not null default 0;
+
+create index if not exists website_order_requests_sale_id_idx
+  on public.website_order_requests (sale_id);
+
+-- Convert an accepted, deposit-paid website request to a normal ERP sale.
+-- The entire operation is atomic: stock deduction, sale, payment ledger,
+-- invoice, invoice lines, and request status either all commit or all roll back.
+create or replace function public.convert_website_order_to_sale(
+  p_order_id uuid,
+  p_converted_by uuid
+)
+returns public.sales
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_order public.website_order_requests%rowtype;
+  v_sale public.sales%rowtype;
+  v_invoice_id uuid;
+  v_invoice_number text;
+  v_product_name text;
+  v_available_quantity integer;
+  v_cost_per_unit numeric(14,4);
+  v_cogs numeric(14,2);
+  v_revenue_for_margin numeric(14,2);
+  v_balance_due numeric(14,2);
+  v_payment_status text;
+  v_payments_total numeric(14,2);
+begin
+  if not exists (
+    select 1 from public.profiles p
+    where p.id = p_converted_by
+      and p.role in ('admin', 'manager')
+  ) then
+    raise exception 'Only an administrator or manager can convert a website order.';
+  end if;
+
+  select * into v_order
+  from public.website_order_requests
+  where id = p_order_id
+  for update;
+
+  if not found then
+    raise exception 'Website order request not found.';
+  end if;
+
+  -- Make retries safe: never create a second sale or deduct stock twice.
+  if v_order.status = 'converted' and v_order.sale_id is not null then
+    select * into v_sale from public.sales where id = v_order.sale_id;
+    if not found then
+      raise exception 'This request is marked converted but its linked sale is missing. Contact an administrator.';
+    end if;
+    return v_sale;
+  end if;
+
+  if v_order.status <> 'confirmed'
+     or v_order.accepted_at is null
+     or v_order.accepted_by is null
+     or v_order.deposit_verified_at is null
+     or v_order.deposit_required is null
+     or v_order.amount_paid < v_order.deposit_required then
+    raise exception 'The website order must have a verified deposit and management acceptance before conversion.';
+  end if;
+
+  if v_order.product_id is null
+     or v_order.quoted_subtotal is null
+     or v_order.delivery_charge is null
+     or v_order.quoted_total is null
+     or v_order.quoted_total <= 0
+     or round(v_order.quoted_subtotal + v_order.delivery_charge + v_order.additional_charges, 2) <> v_order.quoted_total then
+    raise exception 'The website order quote is incomplete or inconsistent.';
+  end if;
+
+  select coalesce(sum(amount), 0)
+  into v_payments_total
+  from public.website_order_payments
+  where order_id = p_order_id;
+
+  if round(v_payments_total, 2) <> round(v_order.amount_paid, 2)
+     or v_payments_total < v_order.deposit_required then
+    raise exception 'The verified payment ledger does not match the order balance. Contact an administrator.';
+  end if;
+
+  select name into v_product_name
+  from public.products
+  where id = v_order.product_id;
+
+  if not found then
+    raise exception 'The selected product no longer exists in the product catalogue.';
+  end if;
+
+  -- Lock and validate the finished-goods stock row before deducting.
+  select quantity, unit_cost
+  into v_available_quantity, v_cost_per_unit
+  from public.finished_goods_inventory
+  where product_name = v_product_name
+  for update;
+
+  if not found then
+    raise exception 'No finished-goods inventory record exists for product "%".', v_product_name;
+  end if;
+
+  if coalesce(v_available_quantity, 0) < v_order.quantity then
+    raise exception 'Insufficient finished-goods stock for "%". Available: %, requested: %.',
+      v_product_name, coalesce(v_available_quantity, 0), v_order.quantity;
+  end if;
+
+  v_cost_per_unit := coalesce(v_cost_per_unit, 0);
+  v_cogs := round(v_order.quantity * v_cost_per_unit, 2);
+  v_balance_due := greatest(round(v_order.quoted_total - v_payments_total, 2), 0);
+  v_revenue_for_margin := round(v_order.quoted_subtotal + v_order.additional_charges, 2);
+
+  v_payment_status := case
+    when v_balance_due = 0 then 'Paid'
+    when v_payments_total > 0 then 'Partially Paid'
+    else 'Unpaid'
+  end;
+
+  -- Match the stock valuation and deduction behaviour of the existing sale RPC.
+  update public.finished_goods_inventory
+  set
+    quantity = quantity - v_order.quantity,
+    costed_quantity = case
+      when costed_quantity is null then greatest(0, quantity - v_order.quantity)
+      when costed_quantity - v_order.quantity < 0 then 0
+      else costed_quantity - v_order.quantity
+    end,
+    total_cost = case
+      when quantity - v_order.quantity <= 0 then 0
+      else (quantity - v_order.quantity) * v_cost_per_unit
+    end,
+    unit_cost = case
+      when quantity - v_order.quantity <= 0 then 0
+      else v_cost_per_unit
+    end,
+    updated_at = now()
+  where product_name = v_product_name;
+
+  -- Delivery is included in the receivable and invoice total, but excluded
+  -- from gross margin because no transport-cost ledger is linked to this order.
+  insert into public.sales (
+    customer_name, product_name, quantity, unit_price, total_amount,
+    payment_method, amount_paid, balance_due, cost_per_unit, cogs,
+    gross_profit, gross_margin, delivery_charge, additional_charges
+  ) values (
+    v_order.customer_name, v_product_name, v_order.quantity,
+    round(v_order.quoted_subtotal / v_order.quantity, 2),
+    v_order.quoted_total, 'Website Order', v_payments_total,
+    v_balance_due, v_cost_per_unit, v_cogs,
+    round(v_revenue_for_margin - v_cogs, 2),
+    case when v_revenue_for_margin > 0
+      then round(((v_revenue_for_margin - v_cogs) / v_revenue_for_margin) * 100, 2)
+      else 0 end,
+    v_order.delivery_charge, v_order.additional_charges
+  )
+  returning * into v_sale;
+
+  -- Carry each verified website payment into the ERP sale payment ledger.
+  insert into public.sale_payments (
+    sale_id, amount, payment_method, reference, notes, created_by, created_at
+  )
+  select
+    v_sale.id, p.amount, p.payment_method, p.reference,
+    concat_ws(' | ', nullif(p.notes, ''), 'Website order ' || v_order.reference),
+    p.verified_by, p.verified_at
+  from public.website_order_payments p
+  where p.order_id = p_order_id
+  order by p.verified_at, p.id;
+
+  v_invoice_number := 'INV-' || v_order.reference;
+
+  insert into public.invoices (
+    invoice_number, sale_id, customer_name, product_name, quantity,
+    unit_price, total_amount, payment_method, payment_status,
+    delivery_charge, additional_charges
+  ) values (
+    v_invoice_number, v_sale.id, v_order.customer_name, v_product_name,
+    v_order.quantity, round(v_order.quoted_subtotal / v_order.quantity, 2),
+    v_order.quoted_total, 'Website Order', v_payment_status,
+    v_order.delivery_charge, v_order.additional_charges
+  )
+  returning id into v_invoice_id;
+
+  insert into public.invoice_items (invoice_id, product_name, quantity, unit_price, total_price)
+  values (
+    v_invoice_id, v_product_name, v_order.quantity,
+    round(v_order.quoted_subtotal / v_order.quantity, 2), v_order.quoted_subtotal
+  );
+
+  if v_order.delivery_charge > 0 then
+    insert into public.invoice_items (invoice_id, product_name, quantity, unit_price, total_price)
+    values (v_invoice_id, 'Delivery charge', 1, v_order.delivery_charge, v_order.delivery_charge);
+  end if;
+
+  if v_order.additional_charges > 0 then
+    insert into public.invoice_items (invoice_id, product_name, quantity, unit_price, total_price)
+    values (v_invoice_id, 'Additional charges', 1, v_order.additional_charges, v_order.additional_charges);
+  end if;
+
+  update public.website_order_requests
+  set status = 'converted', sale_id = v_sale.id
+  where id = p_order_id;
+
+  return v_sale;
+end;
+$$;
+
+revoke all on function public.convert_website_order_to_sale(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.convert_website_order_to_sale(uuid, uuid) to service_role;
+
+-- These existing sales functions are staff workflows, not public endpoints.
+revoke execute on function public.create_sale_with_current_price(text, uuid, integer, text) from public, anon;
+revoke execute on function public.record_sale_payment(uuid, numeric, text, text, text) from public, anon;
