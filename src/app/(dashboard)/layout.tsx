@@ -40,6 +40,10 @@ const navigation: NavSection[] = [
         label: "Sales History",
         href: "/sales/history",
       },
+      {
+        label: "Website Orders",
+        href: "/website-orders",
+      },
     ],
   },
   {
@@ -123,6 +127,7 @@ function isActivePath(pathname: string, href: string): boolean {
 function getPageTitle(pathname: string): string {
   if (pathname === "/dashboard") return "Dashboard";
   if (pathname.startsWith("/sales")) return "Sales";
+  if (pathname.startsWith("/website-orders")) return "Website Orders";
   if (pathname.startsWith("/production")) return "Production";
   if (pathname.startsWith("/inventory")) return "Inventory";
   if (pathname.startsWith("/customers")) return "Customers";
