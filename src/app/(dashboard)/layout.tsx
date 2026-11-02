@@ -150,6 +150,7 @@ export default function DashboardLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [roleLoading, setRoleLoading] = useState(true);
 
   useEffect(() => {
@@ -161,6 +162,7 @@ export default function DashboardLayout({
 
         if (!user) {
           setIsAdmin(false);
+          setUserRole(null);
           return;
         }
 
@@ -177,12 +179,13 @@ export default function DashboardLayout({
           );
 
           setIsAdmin(false);
+          setUserRole(null);
           return;
         }
 
-        setIsAdmin(
-          data?.role?.toLowerCase() === "admin"
-        );
+        const role = data?.role?.toLowerCase() ?? null;
+        setUserRole(role);
+        setIsAdmin(role === "admin");
       } catch (error) {
         console.error(
           "Failed to check admin role:",
@@ -190,6 +193,7 @@ export default function DashboardLayout({
         );
 
         setIsAdmin(false);
+        setUserRole(null);
       } finally {
         setRoleLoading(false);
       }
@@ -270,6 +274,7 @@ export default function DashboardLayout({
             <Navigation
               pathname={pathname}
               isAdmin={isAdmin}
+              userRole={userRole}
               onNavigate={() =>
                 setMobileMenuOpen(false)
               }
@@ -311,6 +316,7 @@ export default function DashboardLayout({
             <Navigation
               pathname={pathname}
               isAdmin={isAdmin}
+              userRole={userRole}
             />
           </div>
 
@@ -352,10 +358,12 @@ export default function DashboardLayout({
 function Navigation({
   pathname,
   isAdmin,
+  userRole,
   onNavigate,
 }: {
   pathname: string;
   isAdmin: boolean;
+  userRole: string | null;
   onNavigate?: () => void;
 }) {
   const sections = isAdmin
@@ -371,7 +379,7 @@ function Navigation({
           </p>
 
           <div className="space-y-1">
-            {section.items.map((item) => {
+            {section.items.filter((item) => item.href !== "/website-orders" || ["admin", "manager", "operator", "accountant"].includes(userRole ?? "")).map((item) => {
               const active = isActivePath(
                 pathname,
                 item.href
