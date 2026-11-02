@@ -157,8 +157,8 @@ export default function WebsiteOrdersPage() {
             <p className="text-sm text-gray-600">The required deposit has been recorded. An administrator or manager must now confirm that the factory accepts this order before it becomes Confirmed.</p>
             <button type="button" onClick={() => void acceptOrder()} disabled={saving} className="w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Accepting…" : "Accept and confirm order"}</button>
           </div>}
-          {["awaiting_deposit","confirmed"].includes(selected.status) && <form onSubmit={recordPayment} className="space-y-3 border-t pt-5">
-            <h3 className="font-bold">{selected.status === "confirmed" ? "Record balance payment" : "Verify customer payment"}</h3>
+          {["awaiting_deposit","deposit_received","confirmed"].includes(selected.status) && <form onSubmit={recordPayment} className="space-y-3 border-t pt-5">
+            <h3 className="font-bold">{selected.amount_paid > 0 ? "Record additional payment" : "Verify customer payment"}</h3>
             <p className="text-xs text-gray-500">Only record money received and independently verified by authorised staff. Deposit required: {money(selected.deposit_required)}.</p>
             <label className="block text-sm font-medium">Amount received (GH₵)<input required type="number" min="0.01" max={Math.max(0, Number(selected.balance_due ?? 0))} step="0.01" value={paymentAmount} onChange={e=>setPaymentAmount(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2"/></label>
             <label className="block text-sm font-medium">Payment method<select value={paymentMethod} onChange={e=>setPaymentMethod(e.target.value)} className="mt-1 w-full rounded-lg border bg-white px-3 py-2"><option>Mobile Money</option><option>Bank Transfer</option><option>Cash at Factory</option><option>Other verified method</option></select></label>
@@ -166,7 +166,8 @@ export default function WebsiteOrdersPage() {
             <label className="block text-sm font-medium">Verification notes (optional)<textarea maxLength={500} rows={2} value={paymentNotes} onChange={e=>setPaymentNotes(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2"/></label>
             <button disabled={saving||!Number.isFinite(Number(paymentAmount))||Number(paymentAmount)<=0||Number(paymentAmount)>Number(selected.balance_due??0)} className="w-full rounded-lg bg-gray-900 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Recording…" : "Record verified payment"}</button>
           </form>}
-          {selected.status === "confirmed" && <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">Deposit threshold reached and verified. Sale conversion remains a separate controlled step; this request has not deducted finished-goods stock or created an invoice.</p>}
+          {selected.status === "deposit_received" && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">The deposit has been verified. Management acceptance is still required before the order becomes Confirmed.</p>}
+          {selected.status === "confirmed" && <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">This order is accepted and confirmed. Sale conversion remains a separate controlled step; this request has not deducted finished-goods stock or created an invoice.</p>}
           {selected.status === "converted" && <p className="text-sm text-green-700">Converted to ERP sale.</p>}
         </section>}
       </div>}
