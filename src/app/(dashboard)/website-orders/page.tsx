@@ -168,6 +168,34 @@ export default function WebsiteOrdersPage() {
             <p className="text-sm text-gray-600">The required deposit has been recorded. An administrator or manager must now confirm that the factory accepts this order before it becomes Confirmed.</p>
             <button type="button" onClick={() => void acceptOrder()} disabled={saving} className="w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Accepting…" : "Accept and confirm order"}</button>
           </div>}
+          {selected.status === "awaiting_deposit" && <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <h3 className="font-bold">Send the quotation to the customer</h3>
+            <p className="text-sm text-gray-700">Share the agreed total and deposit amount with the customer using WhatsApp. This opens a pre-filled message; staff must review and send it.</p>
+            <a
+              href={(() => {
+                const phone = selected.customer_phone.replace(/\D/g, "").replace(/^0/, "233");
+                const message = [
+                  "Hello " + selected.customer_name + ", thank you for your order request to Rexy Blocks Factory.",
+                  "Reference: " + selected.reference,
+                  "Product: " + selected.product_name + " " + (selected.product_size ?? ""),
+                  "Quantity: " + selected.quantity.toLocaleString() + " blocks",
+                  "Fulfilment: " + selected.fulfilment_type + " — " + (selected.fulfilment_location || "Factory pickup"),
+                  "Blocks subtotal: " + money(selected.quoted_subtotal),
+                  "Delivery: " + money(selected.delivery_charge),
+                  "Other charges: " + money(selected.additional_charges),
+                  "Total quotation: " + money(selected.quoted_total),
+                  "Deposit required (" + selected.deposit_percent + "%): " + money(selected.deposit_required),
+                  "Balance after deposit: " + money(selected.balance_due == null ? null : selected.balance_due - (selected.deposit_required ?? 0)),
+                  "Please contact our team if you have questions. Your order is not confirmed until payment is verified and the factory accepts it.",
+                  "Rexy Blocks Factory"
+                ].join("\n");
+                return "https://wa.me/" + phone + "?text=" + encodeURIComponent(message);
+              })()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex w-full items-center justify-center rounded-lg bg-[#16834b] px-4 py-3 text-sm font-bold text-white hover:bg-[#116b3d]"
+            >Open WhatsApp quotation →</a>
+          </div>}
           {["awaiting_deposit","deposit_received","confirmed"].includes(selected.status) && <form onSubmit={recordPayment} className="space-y-3 border-t pt-5">
             <h3 className="font-bold">{selected.amount_paid > 0 ? "Record additional payment" : "Verify customer payment"}</h3>
             <p className="text-xs text-gray-500">Only record money received and independently verified by authorised staff. Deposit required: {money(selected.deposit_required)}.</p>
