@@ -18,14 +18,33 @@ export async function GET() {
 
     const { data, error } = await supabaseAdmin
       .from("website_order_requests")
-      .select("id,reference,customer_name,customer_phone,product_id,product_name,product_size,quantity,fulfilment_type,fulfilment_location,requested_date,customer_notes,status,quoted_subtotal,delivery_charge,additional_charges,quoted_total,deposit_percent,deposit_required,amount_paid,balance_due,staff_notes,deposit_verified_at,created_at,updated_at")
+      .select("id,reference,customer_name,customer_phone,product_id,product_name,product_size,quantity,fulfilment_type,fulfilment_location,requested_date,customer_notes,status,quoted_subtotal,delivery_charge,additional_charges,quoted_total,deposit_percent,deposit_required,amount_paid,balance_due,staff_notes,deposit_verified_at,created_at,updated_at,sale_id")
       .order("created_at", { ascending: false })
       .limit(250);
     if (error) {
       console.error("Website order list failed:", error);
       return NextResponse.json({ error: "Unable to load website order requests." }, { status: 500 });
     }
-    return NextResponse.json({ orders: data ?? [] });
+    const orders = data ?? [];
+    const saleIds = orders.map((order) => order.sale_id).filter((id): id is string => Boolean(id));
+    if (saleIds.length) {
+      const [{ data: sales }, { data: invoices }] = await Promise.all([
+        supabaseAdmin.from("sales").select("id,amount_paid,balance_due").in("id", saleIds),
+        supabaseAdmin.from("invoices").select("sale_id,invoice_number").in("sale_id", saleIds),
+      ]);
+      const salesById = new Map((sales ?? []).map((sale) => [sale.id, sale]));
+      const invoicesBySaleId = new Map((invoices ?? []).map((invoice) => [invoice.sale_id, invoice.invoice_number]));
+      for (const order of orders) {
+        if (!order.sale_id) continue;
+        const sale = salesById.get(order.sale_id);
+        if (sale) {
+          order.amount_paid = sale.amount_paid;
+          order.balance_due = sale.balance_due;
+        }
+        order.invoice_number = invoicesBySaleId.get(order.sale_id) ?? null;
+      }
+    }
+    return NextResponse.json({ orders });
   } catch (error) {
     console.error("Website order list route error:", error);
     return NextResponse.json({ error: "Unable to load website order requests." }, { status: 500 });
