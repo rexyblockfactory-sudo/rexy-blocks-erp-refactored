@@ -10,6 +10,7 @@ type Order = {
   delivery_charge: number | null; additional_charges: number | null; quoted_total: number | null;
   deposit_percent: number; deposit_required: number | null; amount_paid: number;
   balance_due: number | null; staff_notes: string | null; deposit_verified_at: string | null;
+  sale_id: string | null; invoice_number?: string | null;
   created_at: string;
 };
 
@@ -88,6 +89,16 @@ export default function WebsiteOrdersPage() {
     finally { setSaving(false); }
   }
 
+  async function convertOrder() {
+    if (!selected || saving) return;
+    setSaving(true); setError(""); setNotice("");
+    try {
+      const result = await send(`/api/website-orders/${selected.id}/convert`, "POST", {});
+      setNotice(`Order converted to ERP sale ${result.sale.id}${result.invoice_number ? ` and invoice ${result.invoice_number}` : ""}. Finished-goods stock, sale payment ledger and invoice were updated in one database transaction.`);
+      await loadOrders();
+    } catch (e) { setError(e instanceof Error ? e.message : "Unable to convert order."); }
+    finally { setSaving(false); }
+  }
   async function acceptOrder() {
     if (!selected || saving) return;
     setSaving(true); setError(""); setNotice("");
@@ -167,8 +178,17 @@ export default function WebsiteOrdersPage() {
             <button disabled={saving||!Number.isFinite(Number(paymentAmount))||Number(paymentAmount)<=0||Number(paymentAmount)>Number(selected.balance_due??0)} className="w-full rounded-lg bg-gray-900 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Recording…" : "Record verified payment"}</button>
           </form>}
           {selected.status === "deposit_received" && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">The deposit has been verified. Management acceptance is still required before the order becomes Confirmed.</p>}
-          {selected.status === "confirmed" && <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">This order is accepted and confirmed. Sale conversion remains a separate controlled step; this request has not deducted finished-goods stock or created an invoice.</p>}
-          {selected.status === "converted" && <p className="text-sm text-green-700">Converted to ERP sale.</p>}
+          {selected.status === "confirmed" && <div className="space-y-3 rounded-lg border border-green-200 bg-green-50 p-4">
+            <p className="text-sm text-green-800">This order is accepted and its deposit is verified. Converting it will deduct the requested finished-goods quantity, create an ERP sale and invoice, and transfer verified deposit payments into the sale payment ledger.</p>
+            <button type="button" onClick={() => void convertOrder()} disabled={saving} className="w-full rounded-lg bg-emerald-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Converting…" : "Convert to ERP sale & invoice"}</button>
+          </div>}
+          {selected.status === "converted" && <div className="space-y-2 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+            <p className="font-semibold">Converted to ERP sale.</p>
+            {selected.sale_id && <p>Sale ID: <span className="font-mono text-xs">{selected.sale_id}</span></p>}
+            {selected.invoice_number && <p>Invoice: <strong>{selected.invoice_number}</strong></p>}
+            <p>Payments and outstanding balance now follow the ERP sale record.</p>
+            <div className="flex gap-4"><a href="/sales" className="font-semibold underline">View sales</a><a href="/invoices" className="font-semibold underline">View invoices</a></div>
+          </div>}
         </section>}
       </div>}
   </main>;
