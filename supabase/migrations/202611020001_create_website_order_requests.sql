@@ -25,7 +25,7 @@ create table if not exists public.website_order_requests (
   quoted_total numeric(14,2) null check (quoted_total is null or quoted_total >= 0),
   deposit_percent numeric(5,2) not null default 50 check (deposit_percent > 0 and deposit_percent <= 100),
   deposit_required numeric(14,2) null check (deposit_required is null or deposit_required >= 0),
-  deposit_paid numeric(14,2) not null default 0 check (deposit_paid >= 0),
+  amount_paid numeric(14,2) not null default 0 check (amount_paid >= 0),
   balance_due numeric(14,2) null check (balance_due is null or balance_due >= 0),
 
   staff_notes text null check (staff_notes is null or char_length(staff_notes) <= 2000),
@@ -40,11 +40,11 @@ create table if not exists public.website_order_requests (
     (quoted_total is not null and deposit_required is not null and balance_due is not null)
   ),
   constraint website_order_deposit_not_overpaid check (
-    quoted_total is null or deposit_paid <= quoted_total
+    quoted_total is null or amount_paid <= quoted_total
   ),
   constraint website_order_confirm_requires_deposit check (
     status not in ('confirmed', 'converted')
-    or (deposit_required is not null and deposit_paid >= deposit_required and deposit_verified_at is not null)
+    or (deposit_required is not null and amount_paid >= deposit_required and deposit_verified_at is not null)
   )
 );
 
@@ -117,7 +117,7 @@ with check (
   and quoted_total is null
   and deposit_percent = 50
   and deposit_required is null
-  and deposit_paid = 0
+  and amount_paid = 0
   and balance_due is null
   and staff_notes is null
   and deposit_verified_at is null
@@ -203,8 +203,8 @@ begin
   if not found then
     raise exception 'Website order request not found.';
   end if;
-  if v_order.status <> 'awaiting_deposit' then
-    raise exception 'This order is not awaiting a deposit.';
+  if v_order.status not in ('awaiting_deposit', 'confirmed') then
+    raise exception 'This order is not accepting further payments.';
   end if;
   if v_order.deposit_required is null or v_order.quoted_total is null then
     raise exception 'A final quote is required before recording a deposit.';
@@ -228,7 +228,7 @@ begin
 
   update public.website_order_requests
   set
-    deposit_paid = v_total_paid,
+    amount_paid = v_total_paid,
     balance_due = greatest(quoted_total - v_total_paid, 0),
     deposit_verified_at = case
       when v_total_paid >= deposit_required then now()
