@@ -283,12 +283,12 @@ declare
   v_invoice_number text;
   v_product_name text;
   v_available_quantity integer;
-  v_cost_per_unit numeric(14,4);
-  v_cogs numeric(14,2);
-  v_revenue_for_margin numeric(14,2);
-  v_balance_due numeric(14,2);
+  v_cost_per_unit numeric;
+  v_cogs numeric;
+  v_revenue_for_margin numeric;
+  v_balance_due numeric;
   v_payment_status text;
-  v_payments_total numeric(14,2);
+  v_payments_total numeric;
 begin
   if not exists (
     select 1 from public.profiles p
@@ -369,9 +369,9 @@ begin
   end if;
 
   v_cost_per_unit := coalesce(v_cost_per_unit, 0);
-  v_cogs := round(v_order.quantity * v_cost_per_unit, 2);
+  v_cogs := v_order.quantity * v_cost_per_unit;
   v_balance_due := greatest(round(v_order.quoted_total - v_payments_total, 2), 0);
-  v_revenue_for_margin := round(v_order.quoted_subtotal + v_order.additional_charges, 2);
+  v_revenue_for_margin := v_order.quoted_subtotal + v_order.additional_charges;
 
   v_payment_status := case
     when v_balance_due = 0 then 'Paid'
@@ -407,7 +407,7 @@ begin
     gross_profit, gross_margin, delivery_charge, additional_charges
   ) values (
     v_order.customer_name, v_product_name, v_order.quantity,
-    round(v_order.quoted_subtotal / v_order.quantity, 2),
+    v_order.quoted_subtotal / v_order.quantity,
     v_order.quoted_total, 'Website Order', v_payments_total,
     v_balance_due, v_cost_per_unit, v_cogs,
     round(v_revenue_for_margin - v_cogs, 2),
@@ -447,7 +447,7 @@ begin
   insert into public.invoice_items (invoice_id, product_name, quantity, unit_price, total_price)
   values (
     v_invoice_id, v_product_name, v_order.quantity,
-    round(v_order.quoted_subtotal / v_order.quantity, 2), v_order.quoted_subtotal
+    v_order.quoted_subtotal / v_order.quantity, v_order.quoted_subtotal
   );
 
   if v_order.delivery_charge > 0 then
