@@ -64,7 +64,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       console.error("Website order quote update failed:", error);
       return NextResponse.json({ error: "Unable to save the quote." }, { status: 500 });
     }
-    return NextResponse.json({ success: true, quoted_total: total, deposit_required: deposit, balance_due: total - deposit });
+    return NextResponse.json({ success: true, quoted_total: total, deposit_required: deposit, balance_due: total });
   } catch (error) {
     console.error("Website order quote route error:", error);
     return NextResponse.json({ error: "Invalid quote request." }, { status: 400 });
