@@ -205,7 +205,7 @@ begin
   if not found then
     raise exception 'Website order request not found.';
   end if;
-  if v_order.status not in ('awaiting_deposit', 'confirmed') then
+  if v_order.status not in ('awaiting_deposit', 'deposit_received', 'confirmed') then
     raise exception 'This order is not accepting further payments.';
   end if;
   if v_order.deposit_required is null or v_order.quoted_total is null then
@@ -237,6 +237,7 @@ begin
       else deposit_verified_at
     end,
     status = case
+      when v_total_paid >= deposit_required and v_order.accepted_at is not null then 'confirmed'
       when v_total_paid >= deposit_required then 'deposit_received'
       else 'awaiting_deposit'
     end
