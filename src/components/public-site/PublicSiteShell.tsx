@@ -1,47 +1,19 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import "./public-site.css";
 
-const WHATSAPP_NUMBER = "233547831902";
-const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Hello Rexy Blocks Factory, I would like to enquire about your concrete blocks and request a quotation.")}`;
+export const WHATSAPP_URL = "https://wa.me/233547831902?text=" + encodeURIComponent("Hello Rexy Blocks Factory, I would like a quotation for concrete blocks.");
+const navigation = [{ href: "/blocks", label: "Our blocks" }, { href: "/about", label: "Our story" }, { href: "/contact", label: "Contact" }];
 
-const navigation = [
-  { href: "/", label: "Home" },
-  { href: "/blocks", label: "Our blocks" },
-  { href: "/about", label: "About us" },
-  { href: "/contact", label: "Contact" },
-];
-
+export function Brand() {
+  return <Link href="/" className="rf-brand" aria-label="Rexy Blocks Factory home"><span className="rf-mark" aria-hidden="true"><svg viewBox="0 0 36 36" fill="none"><path d="m5 11 13-7 13 7-13 7-13-7Z" fill="currentColor"/><path d="m5 17 13 7 13-7v6l-13 7-13-7v-6Z" fill="currentColor"/></svg></span><span>REXY BLOCKS<small>FACTORY Â· KUMASI, GHANA</small></span></Link>;
+}
 export default function PublicSiteShell({ children }: { children: ReactNode }) {
-  return (
-    <div className="min-h-screen bg-[#f7f7f3] text-[#17231d]">
-      <header className="sticky top-0 z-40 border-b border-black/10 bg-[#f7f7f3]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
-          <Link href="/" className="flex items-center gap-3" aria-label="Rexy Blocks Factory home">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#183b2b] text-lg font-black text-[#e6bd65]">R</span>
-            <span><span className="block text-sm font-black tracking-[0.16em]">REXY BLOCKS</span><span className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-[#637267]">Factory & Building Materials</span></span>
-          </Link>
-          <nav className="hidden items-center gap-8 md:flex" aria-label="Main navigation">
-            {navigation.map(item => <Link key={item.href} href={item.href} className="text-sm font-semibold text-[#526057] transition hover:text-[#183b2b]">{item.label}</Link>)}
-          </nav>
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="hidden rounded-full border border-[#183b2b]/20 px-4 py-2.5 text-sm font-bold text-[#183b2b] transition hover:bg-[#183b2b]/5 sm:inline-flex">Staff login</Link>
-            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="rounded-full bg-[#d5a84e] px-4 py-2.5 text-sm font-extrabold text-[#17231d] transition hover:bg-[#e2bb6b]">WhatsApp us</a>
-          </div>
-        </div>
-        <nav className="mx-auto flex max-w-7xl gap-6 overflow-x-auto px-5 pb-3 md:hidden" aria-label="Mobile navigation">
-          {navigation.map(item => <Link key={item.href} href={item.href} className="whitespace-nowrap text-xs font-semibold text-[#526057]">{item.label}</Link>)}
-          <Link href="/login" className="whitespace-nowrap text-xs font-semibold text-[#183b2b]">Staff login</Link>
-        </nav>
-      </header>
-      {children}
-      <footer className="bg-[#14291f] text-white">
-        <div className="mx-auto grid max-w-7xl gap-10 px-5 py-14 md:grid-cols-3 lg:px-8">
-          <div><p className="text-lg font-black tracking-[0.14em]">REXY BLOCKS FACTORY</p><p className="mt-3 max-w-sm text-sm leading-6 text-white/65">Quality concrete blocks and building materials for projects that need a strong foundation.</p></div>
-          <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-[#e6bd65]">Explore</p><div className="mt-4 flex flex-col gap-3 text-sm text-white/75"><Link href="/blocks" className="hover:text-white">Our blocks</Link><Link href="/about" className="hover:text-white">About Rexy</Link><Link href="/contact" className="hover:text-white">Request a quotation</Link><Link href="/login" className="hover:text-white">Staff ERP login</Link></div></div>
-          <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-[#e6bd65]">Contact</p><a href="mailto:rexblocksfactory@gmail.com" className="mt-4 inline-block text-sm text-white/75 hover:text-white">rexblocksfactory@gmail.com</a><a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="mt-3 block text-sm text-white/75 hover:text-white">WhatsApp: +233 54 783 1902</a><p className="mt-3 text-sm text-white/55">Kumasi, Ghana</p></div>
-        </div>
-        <div className="border-t border-white/10 px-5 py-5 text-center text-xs text-white/45">© {new Date().getFullYear()} Rexy Blocks Factory. All rights reserved.</div>
-      </footer>
-    </div>
-  );
+  return <div className="rf-site">
+    <a href="#main-content" className="rf-skip">Skip to content</a>
+    <div className="rf-topline"><div className="rf-container"><span>Solid foundations start here.</span><a href="tel:+233547831902">Letâ€™s talk blocks â†— &nbsp; +233 54 783 1902</a></div></div>
+    <header className="rf-header"><div className="rf-container rf-header-inner"><Brand/><nav aria-label="Main navigation" className="rf-nav">{navigation.map(item => <Link key={item.href} href={item.href}>{item.label}</Link>)}</nav><Link href="/order" className="rf-button rf-button-dark rf-header-cta">Get a quotation <span aria-hidden="true">â†—</span></Link><details className="rf-mobile-nav"><summary aria-label="Open navigation">Menu â˜°</summary><nav aria-label="Mobile navigation"><Link href="/">Home</Link>{navigation.map(item => <Link key={item.href} href={item.href}>{item.label}</Link>)}<Link href="/order">Request a quotation</Link><Link href="/login">Staff login</Link></nav></details></div></header>
+    <div id="main-content" tabIndex={-1}>{children}</div>
+    <footer className="rf-footer"><div className="rf-container"><div className="rf-footer-top"><div><p className="rf-eyebrow">LETâ€™S BUILD SOMETHING LASTING</p><h2>Your next project.<br/>Our next conversation.</h2></div><Link href="/order" className="rf-button rf-button-gold">Request a quotation <span aria-hidden="true">â†—</span></Link></div><div className="rf-footer-grid"><div><Brand/><p>Concrete blocks for the places<br/>we live, work, and grow.</p></div><div><h3>Explore</h3><Link href="/blocks">Our blocks</Link><Link href="/about">Our story</Link><Link href="/order">Request a quotation</Link></div><div><h3>Get in touch</h3><a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">WhatsApp: +233 54 783 1902 â†—</a><a href="mailto:rexblocksfactory@gmail.com">rexblocksfactory@gmail.com</a><span>Kumasi, Ghana</span></div></div><div className="rf-footer-bottom"><span>Â© {new Date().getFullYear()} Rexy Blocks Factory</span><span>Built for strong foundations.</span><Link href="/login">Staff ERP login â†—</Link></div></div></footer>
+  </div>;
 }
