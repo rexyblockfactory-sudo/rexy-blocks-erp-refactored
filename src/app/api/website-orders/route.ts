@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { trackingPath } from "@/lib/website-order-tracking";
+import { paystackSecret } from "@/lib/paystack-deposits";
 
 export async function GET() {
   try {
@@ -25,7 +27,7 @@ export async function GET() {
       console.error("Website order list failed:", error);
       return NextResponse.json({ error: "Unable to load website order requests." }, { status: 500 });
     }
-    type WebsiteOrderRow = Record<string, unknown> & { sale_id: string | null; amount_paid: number; balance_due: number; invoice_number?: string | null };
+    type WebsiteOrderRow = Record<string, unknown> & { id: string; sale_id: string | null; amount_paid: number; balance_due: number; invoice_number?: string | null };
     const orders = (data ?? []) as WebsiteOrderRow[];
     const saleIds = orders.map((order) => order.sale_id).filter((id): id is string => Boolean(id));
     if (saleIds.length) {
@@ -45,7 +47,20 @@ export async function GET() {
         order.invoice_number = invoicesBySaleId.get(order.sale_id) ?? null;
       }
     }
-    return NextResponse.json({ orders });
+    const reviews = new Map<string, string>();
+    if (paystackSecret() && orders.length) {
+      const { data, error } = await supabaseAdmin.from("website_order_checkouts")
+        .select("order_id, reference").eq("status", "needs_review").in("order_id", orders.map(order => order.id));
+      if (error) console.error("Unable to load Paystack reconciliation flags.");
+      for (const checkout of data ?? []) reviews.set(checkout.order_id, checkout.reference);
+    }
+    return NextResponse.json({
+      orders: orders.map(order => ({
+        ...order,
+        tracking_path: trackingPath(order.id),
+        paystack_review_reference: reviews.get(order.id),
+      })),
+    }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     console.error("Website order list route error:", error);
     return NextResponse.json({ error: "Unable to load website order requests." }, { status: 500 });

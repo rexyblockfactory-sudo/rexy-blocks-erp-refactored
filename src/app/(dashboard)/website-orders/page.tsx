@@ -12,6 +12,8 @@ type Order = {
   balance_due: number | null; staff_notes: string | null; deposit_verified_at: string | null;
   sale_id: string | null; invoice_number?: string | null;
   created_at: string;
+  tracking_path?: string | null;
+  paystack_review_reference?: string;
 };
 
 const money = (value: number | null | undefined) => new Intl.NumberFormat("en-GH", {
@@ -152,6 +154,24 @@ export default function WebsiteOrdersPage() {
           </div>
         </section>
         {selected && <section className="space-y-5 rounded-xl border bg-white p-5">
+          {selected.tracking_path && (
+            <button type="button" className="rounded-lg border px-3 py-2 text-sm font-semibold text-[#204a39]"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(new URL(selected.tracking_path!, window.location.origin).toString());
+                  setNotice("Private quote link copied.");
+                } catch {
+                  setError("Could not copy the quote link.");
+                }
+              }}>
+              Copy private quote link
+            </button>
+          )}
+          {selected.paystack_review_reference && (
+            <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+              A Paystack payment needs reconciliation. Check reference {selected.paystack_review_reference} in Paystack before accepting further payment.
+            </p>
+          )}
           <div><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-xl font-bold">{selected.reference}</h2><span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold">{selected.status.replaceAll("_", " ")}</span></div>
             <p className="mt-2 font-semibold">{selected.customer_name} · {selected.customer_phone}</p>
             <p className="mt-1 text-sm text-gray-600">{selected.product_name}{selected.product_size ? " · " + selected.product_size : ""} · {selected.quantity.toLocaleString()} blocks</p>
