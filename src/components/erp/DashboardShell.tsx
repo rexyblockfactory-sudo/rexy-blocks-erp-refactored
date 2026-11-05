@@ -66,7 +66,7 @@ export default function DashboardShell({ children, userRole }: {
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f6f5] text-[#192d26] lg:pl-64">
+    <div className="min-h-screen bg-[#f4f6f5] bg-[radial-gradient(ellipse_at_top_right,#e1ede5_0%,transparent_55%),linear-gradient(135deg,#f8faf8_0%,#eef3ef_100%)] text-[#192d26] lg:pl-64">
       <a href="#erp-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:rounded-md focus:bg-white focus:p-3">Skip to content</a>
       <header className="sticky top-0 z-40 flex min-h-16 items-center justify-between gap-3 border-b border-[#dfe7e2] bg-white px-4 sm:px-7">
         <div className="flex min-w-0 items-center gap-3">
