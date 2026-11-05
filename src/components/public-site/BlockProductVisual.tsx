@@ -7,5 +7,5 @@ export function blockVariant(product: BlockProduct) {
 }
 export default function BlockProductVisual({ product, className = "" }: { product: BlockProduct; className?: string }) {
   const variant = blockVariant(product);
-  return <div className={`rf-product-visual ${className}`}><Image src={variant.type === "hollow" ? "/images/rexy-hollow-block.png" : variant.type === "solid" ? "/images/rexy-solid-block.png" : "/images/rexy-blocks-hero.png"} alt={`${product.name} â€” digital product illustration`} fill sizes="(max-width: 800px) 50vw, 25vw"/><span className="rf-product-badge">{variant.size || "Concrete"} Â· {variant.type}</span></div>;
+  return <div className={`rf-product-visual ${className}`}><Image src={variant.type === "hollow" ? "/images/rexy-hollow-block.png" : variant.type === "solid" ? "/images/rexy-solid-block.png" : "/images/rexy-blocks-hero.png"} alt={`${product.name} — digital product illustration`} fill sizes="(max-width: 800px) 50vw, 25vw"/><span className="rf-product-badge">{variant.size || "Concrete"} · {variant.type}</span></div>;
 }
