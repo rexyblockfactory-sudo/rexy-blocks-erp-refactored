@@ -11,6 +11,9 @@ export interface Sale {
 
   total_amount: number;
 
+  delivery_charge?: number;
+  additional_charges?: number;
+
   payment_method: string;
 
   amount_paid: number;

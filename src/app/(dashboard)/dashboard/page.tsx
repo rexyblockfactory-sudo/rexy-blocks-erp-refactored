@@ -1441,61 +1441,35 @@ export default function DashboardPage() {
     );
 
   if (loading) {
-   return (
-  <main
-    className="min-h-screen bg-cover bg-center bg-fixed bg-no-repeat"
-    style={{
-      backgroundImage: "url('/minimalist-geometric-designs-backgrounds.jpg')",
-    }}
-  >
-    <div className="min-h-screen space-y-8 bg-white/80 p-6 backdrop-blur-[2px]">
-
-      {/* KEEP ALL YOUR EXISTING DASHBOARD CONTENT HERE */}
-
-    </div>
-  </main>
-);
+    return (
+      <main className="mx-auto max-w-[1600px] space-y-6 p-4 sm:p-7">
+        <p role="status" className="text-sm font-medium text-[#52685d]">Loading dashboard…</p>
+        <div aria-hidden="true" className="grid grid-cols-2 gap-4 motion-safe:animate-pulse xl:grid-cols-4">
+          {[0, 1, 2, 3].map(card => <div key={card} className="h-28 rounded-xl bg-[#e4ebe6]" />)}
+        </div>
+      </main>
+    );
   }
 
   return (
-    <main className="space-y-8 p-6">
-
-      {/* HEADER */}
-
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-
-        <div>
-          <h1 className="text-3xl font-bold">
-            Rexy Blocks ERP Dashboard
-          </h1>
-
-          <p className="mt-1 text-gray-600">
-            Management overview of sales,
-            production, inventory,
-            receivables, expenses,
-            and profitability.
+    <main className="mx-auto max-w-[1600px] space-y-8 p-4 sm:p-7">
+      <header className="flex flex-wrap items-end justify-between gap-6 rounded-2xl bg-[#204a39] p-6 text-white sm:p-8">
+        <div className="max-w-xl">
+          <p className="text-xs font-semibold tracking-widest text-[#efcc86] uppercase">Rexy Blocks Factory</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Operations overview</h1>
+          <p className="mt-2 text-sm leading-relaxed text-[#d7e5dc]">
+            Monitor sales, production, stock and cash flow across the factory.
           </p>
         </div>
-
         <div className="flex flex-wrap gap-2">
-
-          <Link
-            href="/financials/profit-loss"
-            className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold hover:bg-gray-50"
-          >
-            Profit & Loss
+          <Link href="/financials/profit-loss" className="rounded-lg border border-white/40 px-4 py-2.5 text-sm font-semibold hover:bg-white/10">
+            Profit &amp; loss
           </Link>
-
-          <Link
-            href="/receivables/aging"
-            className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
-          >
-            Receivables Aging
+          <Link href="/receivables/aging" className="rounded-lg bg-[#efcc86] px-4 py-2.5 text-sm font-semibold text-[#203a2e] hover:bg-[#f6dca6]">
+            Receivables aging
           </Link>
-
         </div>
-
-      </div>
+      </header>
 
       {/* OPERATIONAL STATS */}
 
@@ -1511,7 +1485,7 @@ export default function DashboardPage() {
       <section className="space-y-4">
 
         <div>
-          <h2 className="text-2xl font-bold">
+          <h2 className="text-xl font-semibold tracking-tight">
             Financial Management Center
           </h2>
 
@@ -1524,32 +1498,32 @@ export default function DashboardPage() {
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Revenue
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {money(salesTotal)}
             </p>
           </div>
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Cost of Goods Sold
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {money(totalCogs)}
             </p>
           </div>
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Gross Profit
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {money(grossProfit)}
             </p>
 
@@ -1558,12 +1532,12 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Net Profit
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {money(netProfit)}
             </p>
           </div>
@@ -1572,44 +1546,44 @@ export default function DashboardPage() {
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Cash Collected
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {money(totalCollected)}
             </p>
           </div>
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Outstanding Credit
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {money(
                 outstandingReceivables
               )}
             </p>
           </div>
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Expenses
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {money(totalExpenses)}
             </p>
           </div>
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Net Cash Flow
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {money(netCashFlow)}
             </p>
           </div>
@@ -1623,7 +1597,7 @@ export default function DashboardPage() {
       <section className="space-y-6">
 
         <div>
-          <h2 className="text-2xl font-bold">
+          <h2 className="text-xl font-semibold tracking-tight tabular-nums">
             Monthly Business Performance
           </h2>
 
@@ -1638,7 +1612,7 @@ export default function DashboardPage() {
 
           {/* SALES CHART */}
 
-          <div className="rounded-xl border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
 
             <h3 className="text-lg font-semibold">
               Monthly Sales
@@ -1684,6 +1658,8 @@ export default function DashboardPage() {
                   <Bar
                     dataKey="sales"
                     name="Sales"
+                    fill="#285a44"
+                    radius={[4, 4, 0, 0]}
                   />
 
                 </BarChart>
@@ -1696,7 +1672,7 @@ export default function DashboardPage() {
 
           {/* PROFIT CHART */}
 
-          <div className="rounded-xl border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
 
             <h3 className="text-lg font-semibold">
               Monthly Gross Profit
@@ -1743,6 +1719,7 @@ export default function DashboardPage() {
                     type="monotone"
                     dataKey="profit"
                     name="Gross Profit"
+                    stroke="#285a44"
                     strokeWidth={3}
                     dot={{
                       r: 4,
@@ -1759,7 +1736,7 @@ export default function DashboardPage() {
 
           {/* PRODUCTION CHART */}
 
-          <div className="rounded-xl border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
 
             <h3 className="text-lg font-semibold">
               Monthly Production
@@ -1805,6 +1782,8 @@ export default function DashboardPage() {
                   <Bar
                     dataKey="production"
                     name="Blocks Produced"
+                    fill="#4e7870"
+                    radius={[4, 4, 0, 0]}
                   />
 
                 </BarChart>
@@ -1817,7 +1796,7 @@ export default function DashboardPage() {
 
           {/* CREDIT CHART */}
 
-          <div className="rounded-xl border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
 
             <h3 className="text-lg font-semibold">
               Monthly Outstanding Credit
@@ -1865,6 +1844,7 @@ export default function DashboardPage() {
                     type="monotone"
                     dataKey="credit"
                     name="Outstanding Credit"
+                    stroke="#946120"
                     strokeWidth={3}
                     dot={{
                       r: 4,
@@ -1888,7 +1868,7 @@ export default function DashboardPage() {
       <section className="space-y-4">
 
         <div>
-          <h2 className="text-2xl font-bold">
+          <h2 className="text-xl font-semibold tracking-tight tabular-nums">
             Inventory Control
           </h2>
 
@@ -1900,12 +1880,12 @@ export default function DashboardPage() {
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Raw Material Value
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {money(rawMaterialValue)}
             </p>
 
@@ -1914,12 +1894,12 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Finished Goods Value
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {money(finishedGoodsValue)}
             </p>
 
@@ -1928,22 +1908,22 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Low Stock Alerts
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {number(lowStockCount)}
             </p>
           </div>
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Uncosted Finished Goods
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {number(
                 uncostedFinishedGoods
               )}
@@ -1961,7 +1941,7 @@ export default function DashboardPage() {
         <section className="space-y-4">
 
           <div>
-            <h2 className="text-2xl font-bold">
+            <h2 className="text-xl font-semibold tracking-tight tabular-nums">
               Expense Breakdown
             </h2>
 
@@ -1988,7 +1968,7 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={item.category}
-                    className="rounded-lg border bg-white p-5 shadow-sm"
+                    className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm"
                   >
 
                     <div className="flex justify-between gap-4">
@@ -2006,7 +1986,7 @@ export default function DashboardPage() {
                     <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100">
 
                       <div
-                        className="h-full rounded-full bg-black"
+                        className="h-full rounded-full bg-[#285a44]"
                         style={{
                           width: `${Math.min(
                             percentage,
@@ -2032,7 +2012,7 @@ export default function DashboardPage() {
       <section className="space-y-4">
 
         <div>
-          <h2 className="text-2xl font-bold">
+          <h2 className="text-xl font-semibold tracking-tight tabular-nums">
             Accounts Receivable
           </h2>
 
@@ -2043,44 +2023,44 @@ export default function DashboardPage() {
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Total Collected
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {money(totalCollected)}
             </p>
           </div>
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Outstanding
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {money(
                 outstandingReceivables
               )}
             </p>
           </div>
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Customers Owing
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {number(customersOwing)}
             </p>
           </div>
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Current (0–30 Days)
             </p>
 
-            <p className="mt-2 text-2xl font-bold">
+            <p className="mt-2 text-xl font-semibold tracking-tight tabular-nums">
               {money(currentReceivables)}
             </p>
           </div>
@@ -2089,7 +2069,7 @@ export default function DashboardPage() {
 
         <div className="grid gap-4 md:grid-cols-3">
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm font-semibold">
               31–60 Days
             </p>
@@ -2099,7 +2079,7 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm font-semibold">
               61–90 Days
             </p>
@@ -2109,7 +2089,7 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="rounded-lg border bg-white p-5 shadow-sm">
+          <div className="min-w-0 rounded-xl border border-[#dfe7e2] bg-white p-5 shadow-sm">
             <p className="text-sm font-semibold">
               90+ Days
             </p>
