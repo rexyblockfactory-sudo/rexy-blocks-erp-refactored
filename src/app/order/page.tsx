@@ -1,10 +1,11 @@
+import { publicMetadata } from "@/components/public-site/site-metadata";
 import Link from "next/link";
 import PublicSiteShell from "@/components/public-site/PublicSiteShell";
 import OrderRequestForm from "@/components/public-site/OrderRequestForm";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type Product = { id: string; name: string; category: string | null; size: string | null; price: number | string | null };
-export const metadata = { title: "Request a Quotation", description: "Request concrete block supply from Rexy Blocks Factory in Kumasi, Ghana." };
+export const metadata = publicMetadata("Request a Quotation", "Request concrete block supply from Rexy Blocks Factory in Kumasi, Ghana.", "/order");
 
 async function getProducts(): Promise<Product[]> {
   try {
