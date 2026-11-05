@@ -124,11 +124,17 @@ export default function WebsiteOrdersPage() {
     finally { setSaving(false); }
   }
 
-  return <main className="space-y-6 p-5 md:p-8">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><h1 className="text-3xl font-bold tracking-tight">Website orders</h1><p className="mt-1 text-sm text-gray-600">Review customer requests, issue quotes and verify deposits.</p></div>
-      <button onClick={() => void loadOrders()} disabled={loading} className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold disabled:opacity-50">{loading ? "Refreshing…" : "Refresh"}</button>
-    </div>
+  return <main className="mx-auto max-w-[1600px] space-y-6 p-4 sm:p-7">
+    <header className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#dfe7e2] bg-white p-5 sm:p-6">
+      <div>
+        <p className="text-xs font-semibold tracking-widest text-[#52685d] uppercase">Sales workspace</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight">Website orders</h1>
+        <p className="mt-1 text-sm text-gray-600">Review customer requests, issue quotes and verify deposits.</p>
+      </div>
+      <button type="button" onClick={() => void loadOrders()} disabled={loading} className="rounded-lg border border-[#dfe7e2] px-4 py-2.5 text-sm font-semibold text-[#204a39] hover:bg-[#eef4ef] disabled:opacity-50">
+        {loading ? "Refreshing…" : "Refresh orders"}
+      </button>
+    </header>
     <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
       Public requests do not reserve stock or create ERP sales. The default deposit is 50% of the full agreed total, including delivery and additional charges. Only authorised staff can issue quotes or verify payments.
     </div>
