@@ -48,7 +48,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Only requests awaiting initial review can receive a new quote." }, { status: 409 });
     }
 
-    const { error } = await supabaseAdmin.from("website_order_requests").update({
+    const { data: updatedOrder, error } = await supabaseAdmin.from("website_order_requests").update({
       quoted_subtotal: subtotal,
       delivery_charge: delivery,
       additional_charges: additional,
@@ -58,11 +58,18 @@ export async function PATCH(request: Request, context: RouteContext) {
       balance_due: total,
       status: "awaiting_deposit",
       staff_notes: staffNotes || null,
-    }).eq("id", orderId);
+    }).eq("id", orderId)
+      .eq("status", "pending_review")
+      .eq("amount_paid", 0)
+      .select("id")
+      .maybeSingle();
 
     if (error) {
       console.error("Website order quote update failed:", error);
       return NextResponse.json({ error: "Unable to save the quote." }, { status: 500 });
+    }
+    if (!updatedOrder) {
+      return NextResponse.json({ error: "The order changed before the quote could be saved. Refresh and review it again." }, { status: 409 });
     }
     return NextResponse.json({ success: true, quoted_total: total, deposit_required: deposit, balance_due: total });
   } catch (error) {
