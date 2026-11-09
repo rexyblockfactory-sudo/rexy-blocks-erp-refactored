@@ -50,3 +50,20 @@
 @media(max-width:1100px){.rf-re-hero-grid{gap:35px}.rf-re-enquiry-grid{gap:40px}.rf-re-visual{min-height:460px}.rf-re-architecture span{width:48px;height:55px}}
 @media(max-width:800px){.rf-re-hero{padding:46px 0 60px}.rf-re-hero-grid,.rf-re-enquiry-grid{grid-template-columns:1fr;gap:30px}.rf-re-hero-copy h1{font-size:clamp(46px,8vw,67px)}.rf-re-visual{min-height:380px}.rf-re-architecture{height:73%;width:78%;left:11%}.rf-re-architecture span{width:55px;height:44px}.rf-re-benefits{grid-template-columns:1fr;gap:15px}.rf-re-benefits article{padding:18px 0}.rf-re-benefits article h3{margin:16px 0 8px}.rf-re-empty{flex-wrap:wrap}.rf-re-empty>div{flex-basis:calc(100% - 95px)}.rf-re-enquiry{padding:65px 0}.rf-re-contact{margin-top:28px}.rf-re-form-panel{padding:30px}}
 @media(max-width:480px){.rf-re-visual{min-height:315px}.rf-re-sun{width:150px;height:150px;right:22px;top:35px}.rf-re-architecture{height:68%;width:90%;left:5%}.rf-re-architecture>div:not(.rf-re-ground){padding:9px;gap:5px}.rf-re-architecture span{width:34px;height:37px;border-width:4px}.rf-re-visual-note{font-size:8px;left:15px;right:15px;bottom:15px}.rf-re-visual-note span:last-child{max-width:42%;text-align:right}.rf-re-empty{padding:24px;gap:16px}.rf-re-empty>div{flex-basis:100%}.rf-re-empty .rf-button{width:100%}.rf-re-form-panel{padding:22px}.rf-re-form-grid{grid-template-columns:1fr;gap:17px}}
+
+/* Real architectural photography: visuals are explicitly labelled as inspiration. */
+.rf-re-visual{margin:0;background:#d8dcd0}
+.rf-re-visual>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}
+.rf-re-visual:after{content:"";position:absolute;inset:55% 0 0;background:linear-gradient(transparent,rgba(11,36,28,.73));pointer-events:none}
+.rf-re-visual-note{z-index:1;color:#fff;border-color:rgba(255,255,255,.65);align-items:flex-end;line-height:1.5}
+.rf-re-visual-note span:last-child{max-width:50%;text-align:right}
+.rf-re-gallery{background:#f7f6f1}
+.rf-re-gallery-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;margin-top:30px}
+.rf-re-gallery-card{margin:0;min-width:0}
+.rf-re-gallery-card>img{display:block;width:100%;height:auto;aspect-ratio:1.32;object-fit:cover;background:#d8e0d6;border-radius:4px}
+.rf-re-gallery-card figcaption{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px 0 12px;border-bottom:1px solid #213d3126}
+.rf-re-gallery-card figcaption strong{font-size:15px;font-weight:600}
+.rf-re-gallery-card figcaption span{color:#657168;font-size:11px;line-height:1.75}
+.rf-re-gallery-card figcaption a,.rf-re-gallery .rf-image-disclaimer a{text-decoration:underline;text-underline-offset:3px;color:#3f654d}
+@media(max-width:800px){.rf-re-gallery-grid{gap:18px}.rf-re-visual-note{font-size:9px}}
+@media(max-width:600px){.rf-re-gallery-grid{grid-template-columns:1fr;gap:35px}.rf-re-gallery-card>img{aspect-ratio:1.4}}
