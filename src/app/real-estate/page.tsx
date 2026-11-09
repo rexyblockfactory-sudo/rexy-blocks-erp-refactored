@@ -86,7 +86,7 @@ export default function RealEstatePage() {
                 <h2>Homes for sale.</h2>
                 <p>We will publish property-specific listings only when their locations, photos, pricing and sale details are confirmed.</p>
               </div>
-              <a href="#buyer-enquiry" className="rf-text-link">Join the buyer enquiry list ↗</a>
+              <a href="#buyer-enquiry" className="rf-text-link">Send a buyer enquiry ↗</a>
             </div>
             <div className="rf-re-empty">
               <span className="rf-re-empty-icon" aria-hidden="true">⌂</span>
@@ -94,7 +94,7 @@ export default function RealEstatePage() {
                 <h3>No verified properties are listed online yet.</h3>
                 <p>Interested in a future home? Send your preferred area, property type and budget. We won&apos;t invent listings, prices or availability.</p>
               </div>
-              <a className="rf-button rf-button-dark" href="#buyer-enquiry">Register your interest ↗</a>
+              <a className="rf-button rf-button-dark" href="#buyer-enquiry">Enquire about homes ↗</a>
             </div>
           </div>
         </section>
