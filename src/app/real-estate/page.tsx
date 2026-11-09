@@ -48,16 +48,19 @@ export default function RealEstatePage() {
               </div>
               <div className="rf-re-microline">Building materials remain available through the <Link href="/blocks">Rexy Blocks catalogue ↗</Link></div>
             </div>
-            <div className="rf-re-visual" role="img" aria-label="Architectural concept illustration representing a future residential development, not an actual property listing">
-              <div className="rf-re-sun" />
-              <div className="rf-re-architecture">
-                <div className="rf-re-house-left"><span /><span /><span /></div>
-                <div className="rf-re-house-center"><span /><span /><span /><span /></div>
-                <div className="rf-re-house-right"><span /><span /></div>
-                <div className="rf-re-ground" />
-              </div>
-              <div className="rf-re-visual-note"><span>RESIDENTIAL DEVELOPMENT</span><span>Concept illustration — not a listing</span></div>
-            </div>
+            <figure className="rf-re-visual">
+              <img
+                src="https://images.unsplash.com/photo-1760067537293-6b30141d6a52?auto=format&amp;fit=crop&amp;fm=jpg&amp;q=80&amp;w=1600"
+                alt="Contemporary tropical residence with palm trees, wood and stone details, shown as design inspiration"
+                width={1600}
+                height={1200}
+                fetchPriority="high"
+              />
+              <figcaption className="rf-re-visual-note">
+                <span>MODERN HOME INSPIRATION</span>
+                <span>Representative photography — not a Rexy property for sale</span>
+              </figcaption>
+            </figure>
           </div>
         </section>
 
@@ -75,6 +78,40 @@ export default function RealEstatePage() {
               <article><span>02 / SELL</span><h3>Homes for ownership</h3><p>Present completed or planned homes for sale with clear property-specific information once verified.</p></article>
               <article><span>03 / CONNECT</span><h3>Buyers in Ghana and abroad</h3><p>Help interested buyers explain their requirements, ask questions and discuss the next steps directly.</p></article>
             </div>
+          </div>
+        </section>
+
+        <section className="rf-section rf-re-gallery" aria-label="Modern home design inspiration">
+          <div className="rf-container">
+            <div className="rf-section-heading">
+              <div>
+                <p className="rf-eyebrow">LIVING SPACES & ARCHITECTURE</p>
+                <h2>Modern design.<br />Beautiful possibilities.</h2>
+                <p>Get inspired by contemporary architecture and welcoming interiors. These are stock photographs, not homes built by Rexy or properties currently available to buy.</p>
+              </div>
+            </div>
+            <div className="rf-re-gallery-grid">
+              <figure className="rf-re-gallery-card">
+                <img
+                  src="https://images.unsplash.com/photo-1766603636671-484c4911a84b?auto=format&amp;fit=crop&amp;fm=jpg&amp;q=80&amp;w=1300"
+                  alt="Modern tropical home with a green lawn, landscaping and palms, representing an architectural style"
+                  width={1300} height={1000} loading="lazy"
+                />
+                <figcaption><strong>Contemporary exteriors</strong><span>Architecture inspiration · <a href="https://unsplash.com/photos/modern-house-with-palm-trees-and-green-lawn-BnRBFRv2WZA" target="_blank" rel="noopener noreferrer">Photo: Alef Morais / Unsplash ↗</a></span></figcaption>
+              </figure>
+              <figure className="rf-re-gallery-card">
+                <img
+                  src="https://images.unsplash.com/photo-1774199679021-db3b421867c3?auto=format&amp;fit=crop&amp;fm=jpg&amp;q=80&amp;w=1300"
+                  alt="Bright modern living room with large windows and a view of trees, for interior inspiration"
+                  width={1300} height={1000} loading="lazy"
+                />
+                <figcaption><strong>Welcoming modern interiors</strong><span>Living-space inspiration · <a href="https://unsplash.com/photos/modern-living-room-with-large-windows-overlooking-trees-A9DmoCgM5iw" target="_blank" rel="noopener noreferrer">Photo: Clay Banks / Unsplash ↗</a></span></figcaption>
+              </figure>
+            </div>
+            <p className="rf-image-disclaimer">
+              Inspiration photography only. Featured homes and interiors are not Rexy Blocks Factory projects or verified property listings.
+              Hero photograph by <a href="https://unsplash.com/photos/modern-house-with-wood-and-stone-exterior-hPu2n_SfV7Q" target="_blank" rel="noopener noreferrer">Alef Morais / Unsplash ↗</a>.
+            </p>
           </div>
         </section>
 
