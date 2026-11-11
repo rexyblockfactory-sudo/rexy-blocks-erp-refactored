@@ -74,6 +74,7 @@ export default function PropertyAdmin({ role }: { role: "admin" | "manager" }) {
 
   const selected = useMemo(() => listings.find(x => x.id === selectedId), [listings, selectedId]);
   const isAdmin = role === "admin";
+  const hasUnsavedChanges = Boolean(selected && JSON.stringify(draft) !== JSON.stringify(toDraft(selected)));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -212,6 +213,7 @@ export default function PropertyAdmin({ role }: { role: "admin" | "manager" }) {
       <section className="rounded-xl border bg-white p-5 md:p-7">
         <h2 className="text-xl font-bold">{selected ? "Edit property listing" : "Create property draft"}</h2>
         <p className="mb-5 mt-1 text-sm text-gray-500">A draft does not appear on the public website.</p>
+        {hasUnsavedChanges && <p role="status" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">Unsaved changes. Save the draft before verifying or publishing this listing.</p>}
         <form onSubmit={save} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-semibold">Listing category
@@ -295,10 +297,10 @@ export default function PropertyAdmin({ role }: { role: "admin" | "manager" }) {
           <label className="block text-sm font-semibold">Verification notes (internal)
             <textarea rows={4} minLength={30} maxLength={3000} className="mt-1 block w-full rounded-lg border p-3" placeholder="Describe which evidence was checked and the date, without storing document numbers or private identity details." value={verificationNotes} onChange={e => setVerificationNotes(e.target.value)} />
           </label>
-          <button type="button" disabled={busy || !!selected.verified_at} onClick={() => void doAction("verify")} className="rounded-lg bg-amber-600 px-5 py-3 font-semibold text-white disabled:opacity-50">
+          <button type="button" disabled={busy || hasUnsavedChanges || !!selected.verified_at} onClick={() => void doAction("verify")} className="rounded-lg bg-amber-600 px-5 py-3 font-semibold text-white disabled:opacity-50">
             {selected.verified_at ? "Verified" : "Verify property"}
           </button>
-          <button type="button" disabled={busy || !selected.verified_at} onClick={() => void doAction("publish")}
+          <button type="button" disabled={busy || hasUnsavedChanges || !selected.verified_at} onClick={() => void doAction("publish")}
             className="ml-2 rounded-lg bg-emerald-800 px-5 py-3 font-semibold text-white disabled:opacity-50">
             Publish verified listing
           </button>
