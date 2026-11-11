@@ -53,7 +53,7 @@ export function validatePhotoUrls(value: unknown): string[] | null {
 }
 
 type EditableProperty = {
-  market: "sale" | "stay"; slug: string; title: string; description: string;
+  market: "sale" | "stay" | "rent"; slug: string; title: string; description: string;
   city: string; region: string; neighborhood: string | null;
   construction_status: string;
   price_ghs: number | null; bedrooms: number | null; bathrooms: number | null;
@@ -64,7 +64,7 @@ export function parseEditableProperty(value: unknown): EditableProperty | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const x = value as Record<string, unknown>;
   const market = x.market;
-  if (market !== "sale" && market !== "stay") return null;
+  if (market !== "sale" && market !== "stay" && market !== "rent") return null;
   const title = typeof x.title === "string" ? x.title.trim() : "";
   const slug = typeof x.slug === "string" ? x.slug.trim() : "";
   const city = typeof x.city === "string" ? x.city.trim() : "";
