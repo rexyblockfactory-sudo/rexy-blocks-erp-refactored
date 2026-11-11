@@ -1,6 +1,10 @@
--- REXY REAL ESTATE / REXY STAYS: REVIEW-ONLY DATABASE PROPOSAL
--- NOT APPLIED. RECONNECT THE SUPABASE PROJECT AND REVIEW THE EXISTING
--- SCHEMA, PRIVILEGES AND BACKUP BEFORE RUNNING AS AN ADMINISTRATOR.
+-- REXY REAL ESTATE / REXY STAYS: PROPERTY SCHEMA RECORD
+-- A corresponding additive migration was applied on November 11, 2026 to
+-- existing Rexy Supabase project qgyenqihqlcvikcyglxb:
+-- create_rexy_property_listings_and_marketing_photos
+-- DO NOT REAPPLY THIS DOCUMENT without confirming current migrations/schema.
+-- The production SITE (Next.js application) has NOT been updated yet.
+-- Review future changes against existing inventory/sales workflows.
 --
 -- Purpose: keep property listings strictly separate from concrete block
 -- inventory, products, website order requests, sales, invoices and payments.
