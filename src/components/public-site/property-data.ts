@@ -12,8 +12,8 @@ export type PublishedProperty = {
   neighborhood: string | null;
   construction_status: "completed" | "under_construction" | "unknown";
   price_ghs: number;
-  bedrooms: number;
-  bathrooms: number;
+  bedrooms: number | null;
+  bathrooms: number | null;
   max_guests: number | null;
   amenities: string[];
   photo_urls: string[];
@@ -51,8 +51,8 @@ function parseProperty(row: Record<string, unknown>, market: PropertyMarket): Pu
     neighborhood: typeof row.neighborhood === "string" ? row.neighborhood : null,
     construction_status: row.construction_status === "under_construction" ? "under_construction" : row.construction_status === "completed" ? "completed" : "unknown",
     price_ghs: price,
-    bedrooms: Math.max(0, Number(row.bedrooms) || 0),
-    bathrooms: Math.max(0, Number(row.bathrooms) || 0),
+    bedrooms: row.bedrooms == null ? null : Math.max(0, Number(row.bedrooms) || 0),
+    bathrooms: row.bathrooms == null ? null : Math.max(0, Number(row.bathrooms) || 0),
     max_guests: row.max_guests == null ? null : Math.max(1, Number(row.max_guests) || 1),
     amenities: Array.isArray(row.amenities) ? row.amenities.filter((item): item is string => typeof item === "string") : [],
     photo_urls: Array.isArray(row.photo_urls) ?
