@@ -23,7 +23,7 @@ export function badRequest(message: string, status = 400) {
 
 export function verifySameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
-  if (!origin) return true;
+  if (!origin) return false;
   try {
     const requestUrl = new URL(request.url);
     const originUrl = new URL(origin);
