@@ -52,8 +52,8 @@ function PropertyCard({ property }: { property: PublishedProperty }) {
       <p className="rf-mp-location">{property.neighborhood ? property.neighborhood + ", " : ""}{property.city}, {property.region}</p>
       <h2><Link href={propertyPath(property)}>{property.title}</Link></h2>
       <div className="rf-mp-specs">
-        <span>{property.bedrooms} beds</span>
-        <span>{property.bathrooms} baths</span>
+        <span>{property.bedrooms == null ? "Beds: to confirm" : `${property.bedrooms} beds`}</span>
+        <span>{property.bathrooms == null ? "Baths: to confirm" : `${property.bathrooms} baths`}</span>
         {property.market === "stay" && property.max_guests !== null && <span>Up to {property.max_guests} guests</span>}
       </div>
       <div className="rf-mp-card-bottom">
