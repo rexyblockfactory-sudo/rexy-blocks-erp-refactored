@@ -8,16 +8,16 @@ export default async function PropertyDetail({ market, slug }: { market: Propert
   const property = await getPublishedProperty(market, slug);
   if (!property) notFound();
   const isStay = market === "stay";
-  const browsePath = isStay ? "/rexy-stays" : "/homes-for-sale";
+  const browsePath = isStay ? "/rexy-stays" : market === "rent" ? "/rentals" : "/homes-for-sale";
 
   return <PublicSiteShell><main className="rf-mp rf-container rf-mp-detail">
     <nav aria-label="Breadcrumbs" className="rf-mp-crumbs">
       <Link href="/">Home</Link> <span>/</span>
-      <Link href={browsePath}>{isStay ? "Rexy Stays" : "Homes for sale"}</Link> <span>/</span>
+      <Link href={browsePath}>{isStay ? "Rexy Stays" : market === "rent" ? "Homes for rent" : "Homes for sale"}</Link> <span>/</span>
       <span aria-current="page">{property.title}</span>
     </nav>
     <div className="rf-mp-detail-heading">
-      <p className="rf-eyebrow">VERIFIED {isStay ? "SHORT-STAY LISTING" : "PROPERTY FOR SALE"}</p>
+      <p className="rf-eyebrow">VERIFIED {isStay ? "SHORT-STAY LISTING" : market === "rent" ? "PROPERTY FOR RENT" : "PROPERTY FOR SALE"}</p>
       <h1>{property.title}</h1>
       <p>{property.neighborhood ? property.neighborhood + ", " : ""}{property.city}, {property.region}, Ghana</p>
     </div>
@@ -57,8 +57,8 @@ export default async function PropertyDetail({ market, slug }: { market: Propert
       </div>
       <aside className="rf-mp-detail-aside">
         <div className="rf-mp-enquiry-panel">
-          <p className="rf-mp-panel-kicker">{isStay ? "Advertised nightly rate" : "Advertised asking price"}</p>
-          <p className="rf-mp-big-price">{propertyPrice(property.price_ghs)}{isStay && <small> / night</small>}</p>
+          <p className="rf-mp-panel-kicker">{isStay ? "Advertised nightly rate" : market === "rent" ? "Advertised monthly rent" : "Advertised asking price"}</p>
+          <p className="rf-mp-big-price">{propertyPrice(property.price_ghs)}{(isStay || market === "rent") && <small> / {isStay ? "night" : "month"}</small>}</p>
           <p className="rf-mp-panel-subtitle">{isStay ?
             "Rates and availability are subject to confirmation. No online checkout or payment is enabled." :
             "Contact our team to discuss a viewing, property details and the purchase process."}</p>
@@ -66,6 +66,6 @@ export default async function PropertyDetail({ market, slug }: { market: Propert
         </div>
       </aside>
     </div>
-    <div className="rf-mp-return"><Link href={browsePath}>← Back to {isStay ? "stays" : "homes for sale"}</Link></div>
+    <div className="rf-mp-return"><Link href={browsePath}>← Back to {isStay ? "stays" : market === "rent" ? "rentals" : "homes for sale"}</Link></div>
   </main></PublicSiteShell>;
 }
