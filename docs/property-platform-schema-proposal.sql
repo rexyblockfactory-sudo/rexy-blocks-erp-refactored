@@ -2,6 +2,11 @@
 -- A corresponding additive migration was applied on November 11, 2026 to
 -- existing Rexy Supabase project qgyenqihqlcvikcyglxb:
 -- create_rexy_property_listings_and_marketing_photos
+-- A second additive migration on Nov 11, 2026 relaxed the rule that
+-- published sale/rental listings must contain confirmed bedroom/bathroom
+-- counts: allow_unconfirmed_room_counts_on_verified_property_listings.
+-- Price, authorized photographs, signed-off owner/authority/photo rights,
+-- verification note and verified_by remain mandatory for publication.
 -- DO NOT REAPPLY THIS DOCUMENT without confirming current migrations/schema.
 -- The production SITE (Next.js application) has NOT been updated yet.
 -- Review future changes against existing inventory/sales workflows.
@@ -56,7 +61,6 @@ create table if not exists public.property_listings (
       and length(trim(verification_notes)) >= 30
       and published_at is not null
       and price_ghs is not null and price_ghs > 0
-      and bedrooms is not null and bathrooms is not null
       and length(trim(description)) > 0
       and cardinality(photo_urls) >= 1
       and (market <> 'stay' or max_guests is not null)
@@ -113,8 +117,9 @@ on conflict (id) do nothing;
 -- 5. Only public-marketing photos belong in this public storage bucket.
 -- 6. Archived/unverified listings are absent from public queries.
 --
--- For the user's uncompleted Kumasi property:
--- create via Property Management > Prepare Kumasi building draft, upload the
--- three supplied images, save as draft. Do NOT insert verified_at/verified_by,
--- and do NOT publish before asking price, bedrooms/bathrooms, rights to sell
--- and ownership evidence are independently checked.
+-- The user's uncompleted Kumasi property now exists as an unpublished draft:
+-- id 36b7153e-cd8f-4802-b9f9-76ac44fe89d5
+-- price GH₵1,500,000; bedroom/bathroom counts unknown; photo upload pending.
+-- The seller reports ownership verified, but a signed-in admin must confirm
+-- documentation/marketing authority/photo rights via the approval workflow.
+-- The property is NOT published and may not be labelled staff-verified yet.
