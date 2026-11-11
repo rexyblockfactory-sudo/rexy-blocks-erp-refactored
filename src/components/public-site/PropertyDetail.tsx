@@ -51,7 +51,7 @@ export default async function PropertyDetail({ market, slug }: { market: Propert
           <h3>Important information</h3>
           <p>{isStay ?
             "Availability is not confirmed by this website. Our team must verify requested dates, guest capacity, applicable charges, check-in rules and any required documentation before a booking can be accepted." :
-            "A viewing request does not reserve this property. Independently verify the ownership documents, planning approvals, survey and sale contract. Confirm all payment instructions with the company before transferring funds."}
+            "A viewing request does not reserve this property. Independently verify ownership documents, planning approvals and property condition; for a rental, review the tenancy agreement and deposit terms before paying anything. Confirm all payment instructions with the company."}
           </p>
         </div>
       </div>
