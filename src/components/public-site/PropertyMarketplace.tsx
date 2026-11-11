@@ -16,6 +16,16 @@ const content = {
     inspiration: "Browse home design inspiration",
     inspirationLink: "/real-estate",
   },
+  rent: {
+    eyebrow: "REXY REAL ESTATE · HOMES FOR RENT",
+    title: "A home to make your own.",
+    description: "Explore verified long-term rental homes in Ghana. Compare location, bedrooms and monthly rental rates before requesting a viewing.",
+    label: "Maximum monthly rent (GH₵)",
+    noResults: "No verified rental homes match your search.",
+    disclaimer: "An enquiry is not a tenancy agreement or reservation. Confirm the landlord's authority, monthly rent, deposit, lease terms and all fees before transferring money.",
+    inspiration: "Ask about available rentals",
+    inspirationLink: "https://wa.me/233547831902?text=" + encodeURIComponent("Hello Rexy Real Estate, I am looking for a long-term rental home in Ghana."),
+  },
   stay: {
     eyebrow: "REXY STAYS · SHORT-STAY HOMES",
     title: "A better way to stay in Ghana.",
@@ -47,7 +57,7 @@ function PropertyCard({ property }: { property: PublishedProperty }) {
         {property.market === "stay" && property.max_guests !== null && <span>Up to {property.max_guests} guests</span>}
       </div>
       <div className="rf-mp-card-bottom">
-        <strong>{propertyPrice(property.price_ghs)}{property.market === "stay" && <small> / night</small>}</strong>
+        <strong>{propertyPrice(property.price_ghs)}{property.market !== "sale" && <small> / {property.market === "stay" ? "night" : "month"}</small>}</strong>
         <Link href={propertyPath(property)} aria-label={"View details for " + property.title}>Details ↗</Link>
       </div>
     </div>
@@ -62,7 +72,7 @@ export default async function PropertyMarketplace({
 }) {
   const copy = content[market];
   const { properties, available } = await getPublishedProperties(market, filters);
-  const path = market === "sale" ? "/homes-for-sale" : "/rexy-stays";
+  const path = market === "sale" ? "/homes-for-sale" : market === "rent" ? "/rentals" : "/rexy-stays";
   const filtered = Boolean(filters.city || filters.minBeds || filters.maxPrice || filters.guests);
   return <PublicSiteShell><main className="rf-mp">
     <section className={"rf-mp-hero rf-mp-hero-" + market}>
@@ -73,6 +83,7 @@ export default async function PropertyMarketplace({
         <div className="rf-mp-sister-links">
           <Link href="/real-estate">Property development</Link>
           <Link href="/homes-for-sale" aria-current={market === "sale" ? "page" : undefined}>Homes for sale</Link>
+          <Link href="/rentals" aria-current={market === "rent" ? "page" : undefined}>Homes for rent</Link>
           <Link href="/rexy-stays" aria-current={market === "stay" ? "page" : undefined}>Rexy Stays</Link>
         </div>
       </div>
@@ -120,7 +131,7 @@ export default async function PropertyMarketplace({
         <div className="rf-mp-results-head">
           <div>
             <p className="rf-eyebrow">VERIFIED PROPERTIES</p>
-            <h2>{market === "sale" ? "Homes for sale" : "Short-stay accommodation"}</h2>
+            <h2>{market === "sale" ? "Homes for sale" : market === "rent" ? "Homes for rent" : "Short-stay accommodation"}</h2>
             <p>Only properties reviewed and approved for publication appear here.</p>
           </div>
           {available && <span className="rf-mp-count">{properties.length} listings</span>}
@@ -135,10 +146,11 @@ export default async function PropertyMarketplace({
                 "We have not published verified properties in this category yet. Contact our team to discuss your requirements, and check back for confirmed availability."}
               </p>
               {market === "sale" ? <Link href="/real-estate#buyer-enquiry" className="rf-button rf-button-dark">Enquire about buying ↗</Link>
-                : <a href={copy.inspirationLink} target="_blank" rel="noopener noreferrer" className="rf-button rf-button-dark">Ask about upcoming stays ↗</a>}
+                : <a href={copy.inspirationLink} target="_blank" rel="noopener noreferrer" className="rf-button rf-button-dark">{market === "rent" ? "Ask about rentals ↗" : "Ask about upcoming stays ↗"}</a>}
             </div>
           </div>}
         <p className="rf-mp-legal">{copy.disclaimer}</p>
+        <p className="rf-mp-legal">Own a property? <Link href="/list-your-property" style={{textDecoration:"underline"}}>Submit it for sale, long-term rent or Rexy Stays review ↗</Link></p>
       </section>
     </div>
   </main></PublicSiteShell>;
