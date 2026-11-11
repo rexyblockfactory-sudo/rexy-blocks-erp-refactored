@@ -78,3 +78,38 @@
 @media(max-width:1200px){.rf-mp-search{grid-template-columns:repeat(3,minmax(0,1fr))}.rf-mp-actions{justify-content:flex-start}}
 @media(max-width:850px){.rf-mp-hero{min-height:390px}.rf-mp-hero-content{padding:65px 0 85px}.rf-mp-search{grid-template-columns:repeat(2,minmax(0,1fr));padding:18px}.rf-mp-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.rf-mp-detail-columns{grid-template-columns:1fr;gap:35px}.rf-mp-enquiry-panel{position:static}.rf-mp-gallery{grid-template-rows:repeat(2,minmax(0,170px))}}
 @media(max-width:550px){.rf-mp-hero{min-height:380px}.rf-mp-hero h1{font-size:46px}.rf-mp-hero-content{padding:55px 0 80px}.rf-mp-hero-content>p:not(.rf-eyebrow){font-size:13px}.rf-mp-photo-note{font-size:8px;left:20px;right:20px;text-align:right}.rf-mp-search{margin-top:-28px;grid-template-columns:1fr}.rf-mp-actions{justify-content:space-between}.rf-mp-results{padding:60px 0}.rf-mp-results-head{align-items:flex-start}.rf-mp-grid{grid-template-columns:1fr}.rf-mp-empty{flex-direction:column;align-items:flex-start;padding:25px;gap:15px}.rf-mp-empty-symbol{width:55px;height:55px;font-size:38px}.rf-mp-gallery{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(2,minmax(0,140px))}.rf-mp-gallery-photo:first-child{grid-column:1/3;grid-row:1/2}.rf-mp-gallery-single{height:270px}.rf-mp-form-row{grid-template-columns:1fr}.rf-mp-enquiry-panel{padding:23px}.rf-mp-detail{padding-bottom:60px}}
+
+/* Homeowner and landlord listing enquiry pages */
+.rf-mp-owner-page{padding-bottom:90px}
+.rf-mp-owner-head{padding:25px 0 44px;max-width:850px}
+.rf-mp-owner-head h1{font-size:clamp(44px,6vw,76px);font-weight:600;line-height:1.1;letter-spacing:-.055em}
+.rf-mp-owner-head>p:not(.rf-eyebrow){font-size:15px;color:#5d7262;line-height:1.9;max-width:680px;margin:22px 0 30px}
+.rf-mp-owner-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
+.rf-mp-owner-choices div{border-top:2px solid #b8c6b9;background:#f0f2eb;padding:19px;border-radius:4px}
+.rf-mp-owner-choices strong{display:block;font-size:17px;letter-spacing:-.03em}
+.rf-mp-owner-choices span{display:block;font-size:12px;line-height:1.65;color:#6a7869;margin-top:7px}
+.rf-mp-owner-body{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(280px,.7fr);gap:40px;align-items:start}
+.rf-mp-owner-panel{background:white;border:1px solid #d7dfd3;border-radius:8px;padding:35px}
+.rf-mp-owner-panel h2{font-size:26px;font-weight:600;letter-spacing:-.045em}
+.rf-mp-owner-panel>p{font-size:13px;color:#66766a;line-height:1.8;margin:10px 0 26px}
+.rf-mp-owner-form{display:grid;gap:23px}
+.rf-mp-owner-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px}
+.rf-mp-owner-fields label{display:flex;flex-direction:column;gap:9px;font-size:12px;font-weight:650}
+.rf-mp-owner-fields input,.rf-mp-owner-fields select,.rf-mp-owner-fields textarea{width:100%;border:1px solid #c5d0c4;border-radius:5px;font-size:13px;font-weight:400;color:#213d31;padding:13px 12px;font-family:inherit}
+.rf-mp-owner-fields input:focus-visible,.rf-mp-owner-fields select:focus-visible,.rf-mp-owner-fields textarea:focus-visible{outline:2px solid #ba8537;outline-offset:2px}
+.rf-mp-owner-fields .rf-mp-owner-wide{grid-column:1/-1}
+.rf-mp-owner-agreement{display:flex;gap:10px;align-items:start;font-size:12px;color:#475a4e;line-height:1.65}
+.rf-mp-owner-agreement input{margin-top:4px;accent-color:#193d31}
+.rf-mp-owner-submit{cursor:pointer;border:0;width:100%}
+.rf-mp-owner-fine{font-size:10px;line-height:1.8;color:#687a69}
+.rf-mp-owner-error{color:#ae3021;font-size:13px}
+.rf-mp-owner-aside{background:#e8ede4;border-radius:6px;padding:32px}
+.rf-mp-owner-aside h2{font-size:27px;font-weight:600;letter-spacing:-.04em}
+.rf-mp-owner-aside ol{list-style:none;margin-top:25px}
+.rf-mp-owner-aside li{padding:18px 0;border-top:1px solid #c7d3c5}
+.rf-mp-owner-aside strong{font-size:13px;display:block}
+.rf-mp-owner-aside li span{display:block;font-size:12px;color:#66766a;line-height:1.8;margin-top:7px}
+.rf-mp-owner-aside-note{font-size:12px;color:#66766a;line-height:1.8;margin-top:20px}
+.rf-mp-hero-rent:before{background-image:url("https://images.unsplash.com/photo-1760067537293-6b30141d6a52?auto=format&fit=crop&fm=jpg&q=75&w=1700")}
+@media(max-width:900px){.rf-mp-owner-body{grid-template-columns:1fr}.rf-mp-owner-aside{max-width:unset}}
+@media(max-width:600px){.rf-mp-owner-choices{grid-template-columns:1fr;gap:10px}.rf-mp-owner-fields{grid-template-columns:1fr}.rf-mp-owner-panel{padding:24px}.rf-mp-owner-head{padding-bottom:30px}.rf-mp-owner-head h1{font-size:47px}}
