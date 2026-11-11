@@ -37,9 +37,9 @@ export default async function PropertyDetail({ market, slug }: { market: Propert
     <div className="rf-mp-detail-columns">
       <div className="rf-mp-description">
         <div className="rf-mp-detail-specs">
-          <span>{property.bedrooms} bedrooms</span>
+          <span>{property.bedrooms == null ? "Bedrooms: to be confirmed" : `${property.bedrooms} bedrooms`}</span>
           {property.construction_status === "under_construction" && <span>Uncompleted / under construction</span>}
-          <span>{property.bathrooms} bathrooms</span>
+          <span>{property.bathrooms == null ? "Bathrooms: to be confirmed" : `${property.bathrooms} bathrooms`}</span>
           {isStay && property.max_guests != null && <span>Up to {property.max_guests} guests</span>}
         </div>
         <h2>{isStay ? "About this stay" : "About this home"}</h2>
