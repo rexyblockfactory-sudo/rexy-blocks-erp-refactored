@@ -1,6 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export type PropertyMarket = "sale" | "stay";
+export type PropertyMarket = "sale" | "stay" | "rent";
 export type PublishedProperty = {
   id: string;
   slug: string;
@@ -61,7 +61,7 @@ function parseProperty(row: Record<string, unknown>, market: PropertyMarket): Pu
 }
 
 export function propertyPath(property: Pick<PublishedProperty, "market" | "slug">): string {
-  return (property.market === "sale" ? "/homes-for-sale/" : "/rexy-stays/") + property.slug;
+  return (property.market === "sale" ? "/homes-for-sale/" : property.market === "rent" ? "/rentals/" : "/rexy-stays/") + property.slug;
 }
 
 export function propertyPrice(price: number): string {
