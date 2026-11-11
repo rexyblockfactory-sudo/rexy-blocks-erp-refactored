@@ -25,11 +25,10 @@ export async function POST(request: Request, context: Context) {
     if (property.status !== "draft") return badRequest("Only draft properties may be verified.", 409);
     if (!property.title || !property.description || !property.city || !property.region ||
         property.price_ghs == null || Number(property.price_ghs) <= 0 ||
-        property.bedrooms == null || property.bathrooms == null ||
         (property.market === "stay" && (!property.max_guests || property.max_guests < 1)) ||
         !Array.isArray(property.photo_urls) || property.photo_urls.length === 0 ||
         validatePhotoUrls(property.photo_urls) === null) {
-      return badRequest("Complete the asking price, description, bedrooms, bathrooms, and upload authorised photos before verification.");
+      return badRequest("Complete the asking price and description, and upload authorised photos before verification. Unknown room counts may remain blank.");
     }
     const { data, error } = await supabaseAdmin.from("property_listings").update({
       verified_by: staff.userId,
