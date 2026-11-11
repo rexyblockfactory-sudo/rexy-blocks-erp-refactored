@@ -34,7 +34,7 @@ export default function PropertyEnquiryForm({ property }: { property: PublishedP
         return;
       }
     }
-    const listingPath = (property.market === "sale" ? "/homes-for-sale/" : "/rexy-stays/") + property.slug;
+    const listingPath = (property.market === "sale" ? "/homes-for-sale/" : property.market === "rent" ? "/rentals/" : "/rexy-stays/") + property.slug;
     const lines = [
       "Hello Rexy " + (isStay ? "Stays" : "Real Estate") + ",",
       isStay ? "I would like to check short-stay availability (not confirm a booking)." : "I would like to request a property viewing (not reserve a property).",
@@ -42,7 +42,7 @@ export default function PropertyEnquiryForm({ property }: { property: PublishedP
       "Property: " + property.title,
       "Location: " + property.city + ", " + property.region,
       "Listing: " + window.location.origin + listingPath,
-      "Advertised " + (isStay ? "nightly rate" : "sale price") + ": GH₵" + property.price_ghs.toLocaleString("en-GH"),
+      "Advertised " + (isStay ? "nightly rate" : property.market === "rent" ? "monthly rent" : "sale price") + ": GH₵" + property.price_ghs.toLocaleString("en-GH"),
       "Full name: " + name.trim(),
       "Contact: " + contact.trim(),
     ];
