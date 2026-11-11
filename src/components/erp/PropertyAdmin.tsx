@@ -28,9 +28,9 @@ const kumasiPreset: Draft = {
   market: "sale",
   slug: "uncompleted-modern-residence-kumasi",
   title: "Uncompleted Modern Residence — Kumasi",
-  description: "Residential building under construction in Kumasi, Ghana. The supplied photographs show a modern multi-level structure, extensive glazed sections and stepped exterior courtyard areas. Construction is unfinished, including portions of the exterior and outdoor facilities. The buyer must inspect the site, verify the land title and approvals, and obtain independent estimates for completion costs. Final layout, room counts, amenities, seller's authority and asking price are pending confirmation.",
+  description: "Residential building under construction in Kumasi, Ghana. The supplied photographs show a modern multi-level structure, extensive glazed sections and stepped exterior courtyard areas. Construction is unfinished, including portions of the exterior and outdoor facilities. The buyer must inspect the site, verify the land title and approvals, and obtain independent estimates for completion costs. Final layout, room counts, amenities and seller's authority require confirmation; asking price GH₵1,500,000.",
   city: "Kumasi", region: "Ashanti Region", neighborhood: "",
-  construction_status: "under_construction", price_ghs: "", bedrooms: "",
+  construction_status: "under_construction", price_ghs: "1500000", bedrooms: "",
   bathrooms: "", max_guests: "", amenities: "", photo_urls: [],
 };
 
