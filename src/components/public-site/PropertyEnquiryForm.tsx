@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { propertyPath, type PublishedProperty } from "@/components/public-site/property-data";
+import type { PublishedProperty } from "@/components/public-site/property-data";
 
 export default function PropertyEnquiryForm({ property }: { property: PublishedProperty }) {
   const isStay = property.market === "stay";
@@ -12,7 +12,8 @@ export default function PropertyEnquiryForm({ property }: { property: PublishedP
   const [guests, setGuests] = useState("1");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
-  const today = new Date().toLocaleDateString("en-CA");
+  const now = new Date();
+  const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
 
   function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -33,13 +34,14 @@ export default function PropertyEnquiryForm({ property }: { property: PublishedP
         return;
       }
     }
+    const listingPath = (property.market === "sale" ? "/homes-for-sale/" : "/rexy-stays/") + property.slug;
     const lines = [
       "Hello Rexy " + (isStay ? "Stays" : "Real Estate") + ",",
       isStay ? "I would like to check short-stay availability (not confirm a booking)." : "I would like to request a property viewing (not reserve a property).",
       "",
       "Property: " + property.title,
       "Location: " + property.city + ", " + property.region,
-      "Listing: " + window.location.origin + propertyPath(property),
+      "Listing: " + window.location.origin + listingPath,
       "Advertised " + (isStay ? "nightly rate" : "sale price") + ": GH₵" + property.price_ghs.toLocaleString("en-GH"),
       "Full name: " + name.trim(),
       "Contact: " + contact.trim(),
