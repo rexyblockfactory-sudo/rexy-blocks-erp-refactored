@@ -44,7 +44,7 @@ export default function RealEstatePage() {
               </p>
               <div className="rf-hero-actions">
                 <a className="rf-button rf-button-dark" href="#buyer-enquiry">Enquire about buying <span aria-hidden="true">↗</span></a>
-                <Link className="rf-button rf-button-outline" href="/homes-for-sale">Browse homes for sale</Link><Link className="rf-button rf-button-outline" href="/rexy-stays">Explore Rexy Stays</Link>
+                <Link className="rf-button rf-button-outline" href="/homes-for-sale">Browse homes for sale</Link><Link className="rf-button rf-button-outline" href="/rentals">Explore rentals</Link><Link className="rf-button rf-button-outline" href="/rexy-stays">Explore Rexy Stays</Link>
               </div>
               <div className="rf-re-microline">Building materials remain available through the <Link href="/blocks">Rexy Blocks catalogue ↗</Link></div>
             </div>
@@ -129,7 +129,7 @@ export default function RealEstatePage() {
               <span className="rf-re-empty-icon" aria-hidden="true">⌂</span>
               <div>
                 <h3>Looking for a home to buy?</h3>
-                <p>Browse verified homes for sale, or send your preferred area, property type and budget. Check Rexy Stays for short-stay accommodation enquiries. We never invent properties, prices or availability.</p>
+                <p>Browse verified homes for sale, or send your preferred area, property type and budget. View <a href="/rentals">long-term rentals</a> and Rexy Stays for short-stay accommodation enquiries. We never invent properties, prices or availability.</p>
               </div>
               <a className="rf-button rf-button-dark" href="#buyer-enquiry">Enquire about homes ↗</a>
             </div>
@@ -152,6 +152,7 @@ export default function RealEstatePage() {
           </div>
         </section>
 
+        <section className="rf-container rf-section"><div className="rf-contact-panel"><p className="rf-eyebrow">FOR PROPERTY OWNERS & LANDLORDS</p><h2>Want to sell or rent out your home?</h2><p>Submit a property for private review. Offer it for sale, as a long-term rental or for short stays. We verify marketing authority before publication.</p><Link className="rf-button rf-button-dark" href="/list-your-property">List your property ↗</Link></div></section>
         <section className="rf-re-enquiry" id="buyer-enquiry">
           <div className="rf-container rf-re-enquiry-grid">
             <div className="rf-re-enquiry-copy">
