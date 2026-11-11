@@ -10,6 +10,7 @@ export type PublishedProperty = {
   city: string;
   region: string;
   neighborhood: string | null;
+  construction_status: "completed" | "under_construction" | "unknown";
   price_ghs: number;
   bedrooms: number;
   bathrooms: number;
@@ -26,7 +27,7 @@ export type PropertyFilters = {
   sort?: "newest" | "price-low" | "price-high";
 };
 
-const fields = "id,slug,market,title,description,city,region,neighborhood,price_ghs,bedrooms,bathrooms,max_guests,amenities,photo_urls";
+const fields = "id,slug,market,title,description,city,region,neighborhood,construction_status,price_ghs,bedrooms,bathrooms,max_guests,amenities,photo_urls";
 
 function parseProperty(row: Record<string, unknown>, market: PropertyMarket): PublishedProperty | null {
   if (row.market !== market || typeof row.id !== "string" ||
@@ -48,6 +49,7 @@ function parseProperty(row: Record<string, unknown>, market: PropertyMarket): Pu
     city: row.city,
     region: row.region,
     neighborhood: typeof row.neighborhood === "string" ? row.neighborhood : null,
+    construction_status: row.construction_status === "under_construction" ? "under_construction" : row.construction_status === "completed" ? "completed" : "unknown",
     price_ghs: price,
     bedrooms: Math.max(0, Number(row.bedrooms) || 0),
     bathrooms: Math.max(0, Number(row.bathrooms) || 0),
