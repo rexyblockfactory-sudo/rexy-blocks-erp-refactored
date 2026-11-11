@@ -46,7 +46,7 @@ function PropertyCard({ property }: { property: PublishedProperty }) {
       ) : (
         <span className="rf-mp-no-photo">Photographs coming soon</span>
       )}
-      <span className="rf-mp-status">Verified listing</span>
+      <span className="rf-mp-status">{property.construction_status === "under_construction" ? "Uncompleted / under construction" : "Verified listing"}</span>
     </Link>
     <div className="rf-mp-card-body">
       <p className="rf-mp-location">{property.neighborhood ? property.neighborhood + ", " : ""}{property.city}, {property.region}</p>
