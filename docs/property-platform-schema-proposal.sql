@@ -1,88 +1,116 @@
--- REXY REAL ESTATE / REXY STAYS — REVIEW-ONLY SQL PROPOSAL.
--- NOT APPLIED. DO NOT EXECUTE ON PRODUCTION UNTIL REVIEWED BY AN AUTHORIZED ADMIN.
--- In an authenticated Supabase environment, generate a migration with
---   supabase migration new create_property_listings
--- and commit a reviewed migration after security checks.
+-- REXY REAL ESTATE / REXY STAYS: REVIEW-ONLY DATABASE PROPOSAL
+-- NOT APPLIED. RECONNECT THE SUPABASE PROJECT AND REVIEW THE EXISTING
+-- SCHEMA, PRIVILEGES AND BACKUP BEFORE RUNNING AS AN ADMINISTRATOR.
 --
--- This table is strictly separate from inventory, sales, products, website_orders,
--- invoices, payroll and other concrete block ERP data.
+-- Purpose: keep property listings strictly separate from concrete block
+-- inventory, products, website order requests, sales, invoices and payments.
+-- Only verified, published listings are visible to the public.
+-- Staff-authenticated Next.js API endpoints use service-role credentials
+-- server-side AFTER checking user roles (admin/manager) and request origin.
 --
--- Security model:
---   1. Website visitors may read PUBLISHED AND VERIFIED listings only.
---   2. The public has NO database privileges to create, edit, delete or verify listings.
---   3. Future staff APIs must check signed-in user and profile role on SERVER before
---      using service-role credentials. Never expose service-role secrets to browsers.
---   4. Publish only following ownership/permission verification and approved
---      photos and descriptions. Only approved properties may populate this table.
---   5. No booking confirmations, inventory reservations, deposit/payment writes,
---      or calendar availability are implemented in phase 1.
+-- Long-term rental prices are GH₵ per month; stay prices are GH₵ per night;
+-- sale prices are GH₵ asking prices.
 --
--- Expected Postgres / Supabase SQL (pending verification of existing schema):
+-- Future phases require separate booking-request & calendar tables, signed
+-- tenancy agreements, independent checks and paid transactions approval.
 
 create table if not exists public.property_listings (
-    id uuid primary key default gen_random_uuid(),
-    slug text not null unique
-      check (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and length(slug) <= 120),
-    market text not null check (market in ('sale', 'stay')),
-    status text not null default 'draft' check (status in ('draft','published','archived')),
-    title text not null check (length(trim(title)) between 4 and 160),
-    description text not null default '',
-    city text not null check (length(trim(city)) between 2 and 80),
-    region text not null check (length(trim(region)) between 2 and 80),
-    neighborhood text,
-    price_ghs numeric(14,2) not null check (price_ghs > 0),
-    bedrooms integer not null default 0 check (bedrooms between 0 and 20),
-    bathrooms integer not null default 0 check (bathrooms between 0 and 20),
-    max_guests integer check (max_guests between 1 and 100),
-    amenities text[] not null default array[]::text[],
-    photo_urls text[] not null default array[]::text[],
-    verified_by uuid references auth.users(id),
-    verified_at timestamptz,
-    published_at timestamptz,
-    created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now(),
-    constraint stay_capacity check (market <> 'stay' or max_guests is not null),
-    constraint verified_before_publish check (
-      status <> 'published' or
-      (verified_at is not null and verified_by is not null and published_at is not null)
+  id uuid primary key default gen_random_uuid(),
+  slug text not null unique
+    check (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and length(slug) <= 120),
+  market text not null check (market in ('sale', 'rent', 'stay')),
+  status text not null default 'draft'
+    check (status in ('draft','published','archived')),
+  title text not null check (length(trim(title)) between 4 and 160),
+  description text not null default ''
+    check (length(description) <= 6000),
+  city text not null check (length(trim(city)) between 2 and 80),
+  region text not null check (length(trim(region)) between 2 and 80),
+  neighborhood text check (neighborhood is null or length(neighborhood) <= 160),
+  construction_status text not null default 'unknown'
+    check (construction_status in ('completed','under_construction','unknown')),
+  -- Private drafts may lack prices, confirmed bedrooms or confirmed bathrooms.
+  price_ghs numeric(14,2) check (price_ghs > 0),
+  bedrooms integer check (bedrooms between 0 and 30),
+  bathrooms integer check (bathrooms between 0 and 30),
+  max_guests integer check (max_guests between 1 and 100),
+  amenities text[] not null default array[]::text[]
+    check (cardinality(amenities) <= 30),
+  photo_urls text[] not null default array[]::text[]
+    check (cardinality(photo_urls) <= 16),
+  -- No private identity, title deed or document numbers in these fields.
+  verification_notes text check (verification_notes is null or length(verification_notes) <= 3000),
+  verified_by uuid references auth.users(id) on delete set null,
+  verified_at timestamptz,
+  published_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint property_publish_requirements check (
+    status <> 'published' or (
+      verified_at is not null and verified_by is not null
+      and verification_notes is not null
+      and length(trim(verification_notes)) >= 30
+      and published_at is not null
+      and price_ghs is not null and price_ghs > 0
+      and bedrooms is not null and bathrooms is not null
+      and length(trim(description)) > 0
+      and cardinality(photo_urls) >= 1
+      and (market <> 'stay' or max_guests is not null)
     )
+  )
 );
 
-create index if not exists property_listings_public_search_idx
-on public.property_listings (market, status, city, price_ghs)
-where status = 'published' and verified_at is not null;
-
-create index if not exists property_listings_published_idx
-on public.property_listings (published_at desc)
-where status = 'published' and verified_at is not null;
+create index if not exists property_listings_public_idx
+  on public.property_listings (market, city, price_ghs, published_at desc)
+  where status = 'published' and verified_at is not null;
 
 alter table public.property_listings enable row level security;
 
--- Never add an anonymous write policy. Admin CRUD must happen behind separately
--- authenticated, role-checked API endpoints or reviewed, narrowly scoped policies.
-revoke all on table public.property_listings from anon, authenticated;
-grant select on table public.property_listings to anon, authenticated;
+-- Explicit column-level SELECT prevents disclosure of confidential
+-- verification notes & verifier identity through direct Supabase clients.
+revoke all on table public.property_listings from public, anon, authenticated;
+
+grant select (
+  id, slug, market, status, title, description, city, region,
+  neighborhood, construction_status, price_ghs, bedrooms, bathrooms,
+  max_guests, amenities, photo_urls, verified_at, published_at
+) on public.property_listings to anon, authenticated;
 
 drop policy if exists property_listings_public_verified_read on public.property_listings;
 create policy property_listings_public_verified_read
-on public.property_listings
-for select
-to anon, authenticated
-using (
-  status = 'published'
-  and verified_at is not null
-  and verified_by is not null
-  and published_at is not null
-);
+  on public.property_listings
+  for select to anon, authenticated
+  using (
+    status = 'published' and verified_at is not null
+    and verified_by is not null and published_at is not null
+  );
 
--- Staff-only drafts and verification should be handled separately; the public
--- select policy above deliberately does not expose drafts, ownership evidence,
--- private addresses, host IDs, private contact information, or booking records.
+-- No public insert/update/delete policies are created, for ANY listing.
+-- The server only permits the authenticated admin/manager workflow.
+-- Staff photos uploaded for marketing are not ownership or ID documents.
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'property-photos', 'property-photos', true, 10485760,
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do nothing;
+
+-- IMPORTANT: do not grant direct browser write access on storage.objects.
+-- The protected /api/property-photos route uses service-role storage
+-- uploads only after verifying staff role, photo rights, MIME signature
+-- and a 10MB maximum.
 --
--- Before adding reservations in a later phase:
---   - create separate private property_booking_requests table with RLS
---   - validate check-out > check-in, guest counts and contact details server-side
---   - add transactional overlap checks, blackout dates and availability calendars
---   - implement explicit review and acceptance by verified staff/hosts
---   - only then consider payments, refunds, identity checks and receipts
---   - never treat a WhatsApp enquiry as a confirmed reservation.
+-- Independently review the actual storage configuration after applying:
+-- 1. SELECT pg_policies against property_listings and storage.objects.
+-- 2. Anonymous SELECT can see published verified listings only; drafts absent.
+-- 3. Authenticated client cannot mutate property_listings.
+-- 4. Unauthenticated client cannot upload property photos.
+-- 5. Only public-marketing photos belong in this public storage bucket.
+-- 6. Archived/unverified listings are absent from public queries.
+--
+-- For the user's uncompleted Kumasi property:
+-- create via Property Management > Prepare Kumasi building draft, upload the
+-- three supplied images, save as draft. Do NOT insert verified_at/verified_by,
+-- and do NOT publish before asking price, bedrooms/bathrooms, rights to sell
+-- and ownership evidence are independently checked.
