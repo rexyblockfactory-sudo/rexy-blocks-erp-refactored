@@ -27,8 +27,18 @@ export async function POST(request: Request, context: Context) {
         property.price_ghs == null || Number(property.price_ghs) <= 0 ||
         (property.market === "stay" && (!property.max_guests || property.max_guests < 1)) ||
         !Array.isArray(property.photo_urls) || property.photo_urls.length === 0 ||
-        validatePhotoUrls(property.photo_urls) === null) {
+        validatePhotoUrls(property.photo_urls, id) === null) {
       return badRequest("Complete the asking price and description, and upload authorised photos before verification. Unknown room counts may remain blank.");
+    }
+    const managedPhotos = property.photo_urls.filter((url: string) => url.startsWith("/api/property-listing-media/"));
+    if (managedPhotos.length) {
+      const { data: source, error: sourceError } = await supabaseAdmin.from("property_submissions")
+        .select("id,photo_paths").eq("listing_id", id).eq("status", "draft_created").maybeSingle();
+      if (sourceError) return badRequest("Unable to verify submitted photos.", 503);
+      if (!source || managedPhotos.some((url: string) => {
+        const index = Number(url.split("/").at(-1));
+        return source.photo_paths[index] !== source.id + "/" + index + ".webp";
+      })) return badRequest("One or more submitted photos are no longer attached to this listing.", 409);
     }
     const { data, error } = await supabaseAdmin.from("property_listings").update({
       verified_by: staff.userId,

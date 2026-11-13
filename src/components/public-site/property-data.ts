@@ -57,7 +57,7 @@ function parseProperty(row: Record<string, unknown>, market: PropertyMarket): Pu
     amenities: Array.isArray(row.amenities) ? row.amenities.filter((item): item is string => typeof item === "string") : [],
     photo_urls: Array.isArray(row.photo_urls) ?
       row.photo_urls.filter((url): url is string =>
-        typeof url === "string" && (/^https:\/\/[^ "'<>]+$/i.test(url) || /^\/images\/properties\/[a-zA-Z0-9/_-]+\.(?:jpg|jpeg|png|webp)$/.test(url))
+        typeof url === "string" && (/^\/api\/property-listing-media\/[a-f0-9-]{36}\/[0-2]$/.test(url) && url.startsWith("/api/property-listing-media/" + row.id + "/") || /^https:\/\/[^ "'<>]+$/i.test(url) || /^\/images\/properties\/[a-zA-Z0-9/_-]+\.(?:jpg|jpeg|png|webp)$/.test(url))
       ) : [],
   };
 }
