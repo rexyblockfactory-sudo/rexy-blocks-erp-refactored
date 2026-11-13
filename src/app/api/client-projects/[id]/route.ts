@@ -29,10 +29,19 @@ export async function GET(_request: Request, context: Context) {
       const { data } = await supabaseAdmin.storage.from("client-project-media").createSignedUrl(p.storage_path, 300);
       return data?.signedUrl ? { id: p.id, caption: p.caption, created_at: p.created_at, url: data.signedUrl } : null;
     }));
+    const memberIds=(members.data??[]).map(m=>m.user_id).filter((v):v is string=>typeof v==="string");
+    let ownerProfiles:{id:string;email:string|null;full_name:string|null}[]=[];
+    if(memberIds.length){
+      const {data:profiles,error:profileError}=await supabaseAdmin.from("profiles")
+        .select("id,email,full_name").in("id",memberIds);
+      if(profileError)return projectError("Could not identify linked owner accounts.",503);
+      ownerProfiles=profiles??[];
+    }
+    const profileById=new Map(ownerProfiles.map(p=>[p.id,p]));
     // Membership IDs are shown to staff only; no service-role credential is sent.
     return NextResponse.json({
       project: project.data, updates: updates.data ?? [], milestones: milestones.data ?? [],
-      members: members.data ?? [], photos: signedPhotos.filter(Boolean),
+      members: (members.data??[]).map(m=>({...m,email:profileById.get(m.user_id)?.email??null,full_name:profileById.get(m.user_id)?.full_name??null})), photos: signedPhotos.filter(Boolean),
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch { return projectError("Unable to load project.", 503); }
 }
