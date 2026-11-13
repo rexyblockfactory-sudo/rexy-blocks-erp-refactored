@@ -12,11 +12,14 @@ This is **not** a public project directory. All client project information is pr
 
 ## Setup
 1. Verify Rexy Supabase project qgyenqihqlcvikcyglxb and back up as appropriate.
-2. Apply docs/project-owner-portal-migration.sql and docs/project-owner-progress-rpc.sql to that project; migrations touch only new client_ tables/function and the client-project-media bucket.
+2. Supabase migrations HAVE BEEN APPLIED to project qgyenqihqlcvikcyglxb on 2026-11-13:
+   - create_rexy_client_project_portal
+   - rexy_client_project_progress_atomic
+   Do not rerun the SQL without first reviewing current migration history. The migrations touch only client_ tables/function and the client-project-media bucket.
 3. Check the private bucket, service-role-only table grants and zero public policies.
 4. Preview branch feature/client-project-progress-portal on Vercel; verify staff admin access, and that customers cannot see ERP or another owner's projects.
-5. Configure Supabase Auth Redirect URLs to include https://rexyblockfactory.com/project-accept-invite (and preview hostname for staging if testing invitations). The app uses /project-accept-invite for first-password and reset.
-6. Test with two consenting test accounts and separate test projects; confirm cross-project URLs return 404 and no photos leak to the public.
+5. Configure Supabase Auth Redirect URLs to include https://rexyblockfactory.com/project-accept-invite (and preview hostname for staging if testing invitations). The app uses /project-accept-invite for first-password and reset. IMPORTANT: the Supabase Auth URL allowlist has not been verified by automated tests; check before sending real invitations.
+6. Test with two consenting test accounts and separate test projects; confirm cross-project URLs return 404, revoked users lose access, and no photos leak to the public.
 7. Promote only after staff review. Do not send real invitations before clients approve onboarding.
 
 ## Working with real projects
@@ -25,3 +28,9 @@ This is **not** a public project directory. All client project information is pr
 - The admin chooses Invite / link owner with the correct email. The linked client then signs in at /project-login.
 - Client can view /my-projects and individual progress pages. They cannot edit records or self-join projects.
 - Avoid putting deeds, passports, financial data or private addresses in photos or updates.
+
+## Release state
+- Preview branch only; no production Vercel release requested yet.
+- Supabase client_project* tables contain zero records after migration; no owner invitations were sent.
+- ERP inventory, movements, sales and block orders remain unchanged.
+- Administrator can revoke memberships, hide an incorrect update, or delete a private photo.
