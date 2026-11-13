@@ -13,8 +13,8 @@ export async function POST(request: Request, context: Context) {
     if (!validProjectOrigin(request)) return projectError("Invalid request origin.", 403);
     const { id } = await context.params;
     if (!isProjectId(id)) return projectError("Invalid project ID.");
-    if (Number(request.headers.get("content-length") ?? 0) > 9*1024*1024) {
-      return projectError("Maximum upload size is 8 MB.", 413);
+    if (Number(request.headers.get("content-length") ?? 0) > 4200000) {
+      return projectError("Maximum upload size is 4 MB.", 413);
     }
     const { data: project } = await supabaseAdmin.from("client_projects").select("id").eq("id", id).maybeSingle();
     if (!project) return projectError("Project not found.", 404);
@@ -22,8 +22,8 @@ export async function POST(request: Request, context: Context) {
     const photo = form.get("photo");
     const caption = typeof form.get("caption") === "string" ? String(form.get("caption")).trim() : "";
     if (!(photo instanceof File) || !["image/jpeg","image/png","image/webp"].includes(photo.type)
-      || photo.size < 200 || photo.size > 8*1024*1024 || caption.length > 240) {
-      return projectError("Choose a JPEG, PNG or WebP image under 8 MB and a short caption.");
+      || photo.size < 200 || photo.size > 4000000 || caption.length > 240) {
+      return projectError("Choose a JPEG, PNG or WebP image under 4 MB and a short caption.");
     }
     if (form.get("confirmed") !== "yes") return projectError("Confirm that the image is authorised for client sharing.");
     const bytes = new Uint8Array(await photo.arrayBuffer());
