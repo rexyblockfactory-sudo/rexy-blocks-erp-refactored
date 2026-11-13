@@ -11,7 +11,7 @@ type Project = {
 type Milestone = { id:string; title:string; status:"pending"|"in_progress"|"completed"; due_date:string|null; sort_order:number };
 type Update = { id:string; heading:string; details:string; progress_percent:number; created_at:string; is_visible:boolean };
 type Photo = { id:string; caption:string; url:string; created_at:string };
-type ProjectDetail = { project:Project; milestones:Milestone[]; updates:Update[]; photos:Photo[]; members:{user_id:string;added_at:string}[] };
+type ProjectDetail = { project:Project; milestones:Milestone[]; updates:Update[]; photos:Photo[]; members:{user_id:string;added_at:string;email:string|null;full_name:string|null}[] };
 
 const statuses=[{value:"planning",label:"Planning"},{value:"in_progress",label:"In progress"},{value:"on_hold",label:"On hold"},{value:"completed",label:"Completed"}] as const;
 const milestoneStates=[{value:"pending",label:"Pending"},{value:"in_progress",label:"In progress"},{value:"completed",label:"Completed"}] as const;
@@ -244,7 +244,7 @@ export default function ClientProjectsDashboard({ role }:{role:"admin"|"manager"
             </form>
             <p className="mt-3 text-xs text-[#738776]">Authorised client accounts linked: {projectData.members.length}</p>
             {projectData.members.length>0&&<div className="mt-3 space-y-2 border-t pt-3">{projectData.members.map(m=><div key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[#eff4ed] p-3">
-              <span className="text-xs text-[#48634f]">Account: {m.user_id.slice(0,8)}… · Linked {new Date(m.added_at).toLocaleDateString("en-GH")}</span>
+              <span className="text-xs text-[#48634f]">{m.email||m.full_name||"Account: "+m.user_id.slice(0,8)+"…"} · Linked {new Date(m.added_at).toLocaleDateString("en-GH")}</span>
               <button type="button" disabled={busy} onClick={()=>void revokeOwner(m.user_id)} className="text-xs font-bold text-red-800 underline underline-offset-2">Revoke access</button>
             </div>)}</div>}
           </section>}
