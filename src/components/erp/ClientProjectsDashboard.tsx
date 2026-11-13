@@ -9,7 +9,7 @@ type Project = {
   progress_percent: number; start_date: string | null; target_date: string | null; updated_at: string;
 };
 type Milestone = { id:string; title:string; status:"pending"|"in_progress"|"completed"; due_date:string|null; sort_order:number };
-type Update = { id:string; heading:string; details:string; progress_percent:number; created_at:string };
+type Update = { id:string; heading:string; details:string; progress_percent:number; created_at:string; is_visible:boolean };
 type Photo = { id:string; caption:string; url:string; created_at:string };
 type ProjectDetail = { project:Project; milestones:Milestone[]; updates:Update[]; photos:Photo[]; members:{user_id:string;added_at:string}[] };
 
@@ -133,6 +133,26 @@ export default function ClientProjectsDashboard({ role }:{role:"admin"|"manager"
     }catch(e){setError(e instanceof Error?e.message:"Unable to invite owner.")}
     finally{setBusy(false)}
   }
+  async function revokeOwner(userId:string){
+    if(!selected||busy||!window.confirm("Remove this owner's access to this project's updates?"))return;
+    setBusy(true);setError("");setNotice("");
+    try{
+      const response=await fetch("/api/client-projects/"+selected+"/members/"+userId,{method:"DELETE"});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||"Unable to remove client access.");
+      setNotice("Access removed from this project.");await loadDetail(selected);
+    }catch(e){setError(e instanceof Error?e.message:"Unable to revoke access.")}
+    finally{setBusy(false)}
+  }
+  async function setUpdateVisibility(updateId:string,is_visible:boolean){
+    if(!selected||busy)return;
+    setBusy(true);setError("");setNotice("");
+    try{
+      await send("/api/client-projects/"+selected+"/updates/"+updateId,{is_visible},"PATCH");
+      setNotice(is_visible?"Report is visible to owners again.":"Report hidden from project owners.");await loadDetail(selected);
+    }catch(e){setError(e instanceof Error?e.message:"Unable to change report visibility.")}
+    finally{setBusy(false)}
+  }
   async function upload(files:FileList|null){
     if(!selected||busy||!files?.length)return;
     if(!permission){setError("Confirm these images are approved for private sharing with the owner.");return;}
@@ -223,6 +243,10 @@ export default function ClientProjectsDashboard({ role }:{role:"admin"|"manager"
               <button type="submit" disabled={busy} className={buttonClass}>Invite / link owner</button>
             </form>
             <p className="mt-3 text-xs text-[#738776]">Authorised client accounts linked: {projectData.members.length}</p>
+            {projectData.members.length>0&&<div className="mt-3 space-y-2 border-t pt-3">{projectData.members.map(m=><div key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[#eff4ed] p-3">
+              <span className="text-xs text-[#48634f]">Account: {m.user_id.slice(0,8)}… · Linked {new Date(m.added_at).toLocaleDateString("en-GH")}</span>
+              <button type="button" disabled={busy} onClick={()=>void revokeOwner(m.user_id)} className="text-xs font-bold text-red-800 underline underline-offset-2">Revoke access</button>
+            </div>)}</div>}
           </section>}
           <section className="rounded-xl border bg-white p-6">
             <h2 className="text-lg font-bold">Post a progress report</h2>
@@ -239,7 +263,9 @@ export default function ClientProjectsDashboard({ role }:{role:"admin"|"manager"
               </label>
               <button disabled={busy} className={buttonClass}>{busy?"Saving...":"Publish progress update"}</button>
             </form>
-            {projectData.updates.length>0&&<div className="mt-6 space-y-3 border-t pt-5">{projectData.updates.map(u=><div key={u.id} className="border-l-2 border-[#c8a15b] pl-4"><p className="text-xs text-[#718274]">{new Date(u.created_at).toLocaleDateString("en-GH")} · {u.progress_percent}%</p><h3 className="mt-1 font-semibold">{u.heading}</h3><p className="mt-1 whitespace-pre-line text-sm leading-6 text-[#637769]">{u.details}</p></div>)}</div>}
+            {projectData.updates.length>0&&<div className="mt-6 space-y-3 border-t pt-5">{projectData.updates.map(u=><div key={u.id} className="border-l-2 border-[#c8a15b] pl-4"><p className="text-xs text-[#718274]">{new Date(u.created_at).toLocaleDateString("en-GH")} · {u.progress_percent}%</p><h3 className="mt-1 font-semibold">{u.heading}</h3><p className="mt-1 whitespace-pre-line text-sm leading-6 text-[#637769]">{u.details}</p>
+            {role==="admin"&&<button type="button" disabled={busy} className="mt-2 text-xs font-semibold text-[#7f6a43] underline underline-offset-2" onClick={()=>void setUpdateVisibility(u.id,!u.is_visible)}>{u.is_visible?"Hide from owner":"Restore owner visibility"}</button>}
+            {!u.is_visible&&<span className="ml-2 text-xs text-[#8f683a]">Hidden</span>}</div>)}</div>}
           </section>
           <section className="rounded-xl border bg-white p-6">
             <h2 className="text-lg font-bold">Construction milestones</h2>
