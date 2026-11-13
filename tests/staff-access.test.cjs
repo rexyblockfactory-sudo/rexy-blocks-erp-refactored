@@ -40,7 +40,7 @@ test('signed-out and invalid sessions cannot read a staff profile', async () => 
 });
 
 test('missing profiles, null roles, and non-staff roles fail closed', async () => {
-  for (const profile of [null, { role: null }, { role: 'customer' }, { role: 'viewer' }]) {
+  for (const profile of [null, { role: null }, { role: 'customer' }, { role: 'viewer' }, { role: 'project_owner' }, { role: 'unassigned' }]) {
     assert.equal((await fixture({ profile }).check()).status, 'denied');
   }
 });
