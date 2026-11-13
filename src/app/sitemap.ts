@@ -6,6 +6,6 @@ export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const products = await getCatalogue();
-  return ["/", "/blocks", "/about", "/contact", "/order", "/real-estate", "/homes-for-sale", "/rentals", "/rexy-stays", "/list-your-property", "/building-from-abroad", ...products.map(productPath)]
+  return ["/", "/blocks", "/about", "/contact", "/order", "/real-estate", "/homes-for-sale", "/rentals", "/rexy-stays", "/list-your-property", "/building-from-abroad", "/project-tracker", ...products.map(productPath)]
     .map(path => ({ url: `${SITE_URL}${path}` }));
 }
