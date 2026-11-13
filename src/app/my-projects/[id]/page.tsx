@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getSignedInUserId, loadOwnerProject, projectStatusLabel } from "@/lib/client-projects";
+import { getSignedInProjectOwnerId, loadOwnerProject, projectStatusLabel } from "@/lib/client-projects";
 import { Brand } from "@/components/public-site/PublicSiteShell";
 import ClientPortalSignOut from "@/components/public-site/ClientPortalSignOut";
 
@@ -10,7 +10,7 @@ type Context = { params: Promise<{ id: string }> };
 const date=(value:string|null)=>value?new Date(value+"T00:00:00Z").toLocaleDateString("en-GH",{year:"numeric",month:"short",day:"numeric"}):"Not set";
 
 export default async function OwnerProjectPage({params}:Context) {
-  const userId=await getSignedInUserId();
+  const userId=await getSignedInProjectOwnerId();
   if(!userId) redirect("/project-login");
   const {id}=await params;
   const detail=await loadOwnerProject(userId,id);

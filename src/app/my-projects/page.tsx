@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSignedInUserId, loadOwnerProjects, projectStatusLabel } from "@/lib/client-projects";
+import { getSignedInProjectOwnerId, loadOwnerProjects, projectStatusLabel } from "@/lib/client-projects";
 import { Brand } from "@/components/public-site/PublicSiteShell";
 import ClientPortalSignOut from "@/components/public-site/ClientPortalSignOut";
 
@@ -8,7 +8,7 @@ export const metadata = { title: "My Construction Projects | Rexy", robots: { in
 export const dynamic = "force-dynamic";
 
 export default async function MyProjectsPage() {
-  const userId=await getSignedInUserId();
+  const userId=await getSignedInProjectOwnerId();
   if(!userId) redirect("/project-login");
   let projects:Awaited<ReturnType<typeof loadOwnerProjects>>=[];
   let problem=false;

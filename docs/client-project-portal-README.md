@@ -18,9 +18,15 @@ This is **not** a public project directory. All client project information is pr
    Do not rerun the SQL without first reviewing current migration history. The migrations touch only client_ tables/function and the client-project-media bucket.
 3. Check the private bucket, service-role-only table grants and zero public policies.
 4. Preview branch feature/client-project-progress-portal on Vercel; verify staff admin access, and that customers cannot see ERP or another owner's projects.
-5. Configure Supabase Auth Redirect URLs to include https://rexyblockfactory.com/project-accept-invite (and preview hostname for staging if testing invitations). The app uses /project-accept-invite for first-password and reset. IMPORTANT: the Supabase Auth URL allowlist has not been verified by automated tests; check before sending real invitations.
+5. Configure the Supabase Auth redirect allowlist with the exact production callback `https://rexyblockfactory.com/project-accept-invite` and the exact callback of the protected Vercel preview for invite tests. Keep the existing staff redirect entries and Site URL. The portal invite uses a server-selected host, and the callback handles Supabase's invitation fragment separately from browser-bound password recovery.
 6. Test with two consenting test accounts and separate test projects; confirm cross-project URLs return 404, revoked users lose access, and no photos leak to the public.
 7. Promote only after staff review. Do not send real invitations before clients approve onboarding.
+
+## Owner/ERP separation
+- Apply the `isolate_project_owners_from_erp` migration before deploying this branch. All newly created accounts start as `unassigned`; only a successful administrator enrollment grants `project_owner` and project membership together. Existing staff roles are not changed.
+- Owner access requires both the owner profile role and a project membership. The ERP staff gate checks the current database profile, not editable Auth metadata. Owner profiles cannot be converted into staff identities; use a separate staff account.
+- The migration hardens currently exposed ERP objects. Future ERP tables, views and functions must be granted explicitly or preserve the same staff-only policy/guard. Public product browsing, verified property listings, and public order submission are intentional exceptions.
+- Run `npm test` for the two-owner and database regression suite. The tests use isolated fixtures and do not send mail or write to the hosted ERP. Before onboarding real clients, verify actual invitation delivery and callback, successful sign-in in two separate browser sessions, cross-project denial, staff access, and private photo handling.
 
 ## Working with real projects
 - Signed-in administrator creates the project in /client-projects.

@@ -19,6 +19,12 @@ export default function ProjectLoginPage() {
     setBusy(true);setError("");
     const result=await supabase.auth.signInWithPassword({email:email.trim(),password});
     if (result.error) {setError("Unable to sign in. Check your email and password, or use your invitation link.");setBusy(false);return;}
+    const {data:profile,error:profileError}=await supabase.from("profiles")
+      .select("role").eq("id",result.data.user.id).maybeSingle();
+    if(profileError || profile?.role!=="project_owner"){
+      setError("This account is not linked to the Project Owner Portal. Contact Rexy to check your invitation.");
+      setBusy(false);return;
+    }
     router.replace("/my-projects");router.refresh();
   }
   return <main className="min-h-screen bg-[#edf1e8] px-5 py-14 text-[#1c3a2c]">

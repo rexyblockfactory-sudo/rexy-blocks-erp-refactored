@@ -25,10 +25,13 @@ export type OwnerProjectDetail = {
   updates: ProjectUpdate[]; photos: ProjectPhoto[];
 };
 
-export const getSignedInUserId = cache(async (): Promise<string | null> => {
+export const getSignedInProjectOwnerId = cache(async (): Promise<string | null> => {
   const session = await createSupabaseServerClient();
   const { data: { user }, error } = await session.auth.getUser();
-  return error ? null : user?.id ?? null;
+  if (error || !user) return null;
+  const { data: profile, error: profileError } = await session.from("profiles")
+    .select("role").eq("id", user.id).maybeSingle();
+  return !profileError && profile?.role === "project_owner" ? user.id : null;
 });
 
 export async function isProjectMember(userId: string, projectId: string): Promise<boolean> {

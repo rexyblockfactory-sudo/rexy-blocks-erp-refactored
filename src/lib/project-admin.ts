@@ -5,11 +5,11 @@ import { NextResponse } from "next/server";
 
 export { isProjectId };
 
-export type ProjectStaff = { role: "admin" | "manager" };
+export type ProjectStaff = { userId: string; role: "admin" | "manager" };
 export async function getProjectStaff(): Promise<ProjectStaff | null> {
   const access = await getStaffAccess();
   if (access.status !== "staff" || (access.role !== "admin" && access.role !== "manager")) return null;
-  return { role: access.role };
+  return { userId: access.userId, role: access.role };
 }
 export function projectError(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } });

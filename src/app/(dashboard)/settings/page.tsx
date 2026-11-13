@@ -540,6 +540,7 @@ export default function SettingsPage() {
                             value={user.role}
                             disabled={
                               isCurrentUser ||
+                              user.role === "project_owner" ||
                               savingUser ===
                                 user.id ||
                               isDeleting
@@ -553,6 +554,9 @@ export default function SettingsPage() {
                             }
                             className="rounded-lg border bg-white p-2 disabled:bg-gray-100 disabled:text-gray-500"
                           >
+                            {(user.role === "project_owner" || user.role === "unassigned") && (
+                              <option value={user.role}>{ROLE_LABELS[user.role]}</option>
+                            )}
                             {ROLES.map(
                               (role) => (
                                 <option

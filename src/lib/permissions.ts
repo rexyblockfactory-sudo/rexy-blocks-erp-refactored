@@ -3,7 +3,9 @@ export type UserRole =
   | "manager"
   | "operator"
   | "production_staff"
-  | "accountant";
+  | "accountant"
+  | "project_owner"
+  | "unassigned";
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Administrator",
@@ -11,12 +13,16 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   operator: "Operator",
   production_staff: "Production Staff",
   accountant: "Accountant",
+  project_owner: "Project Owner",
+  unassigned: "Unassigned",
 };
 
 export const ROLE_PERMISSIONS: Record<
   UserRole,
   string[]
 > = {
+  project_owner: [],
+  unassigned: [],
   admin: [
     "dashboard",
     "customers",
