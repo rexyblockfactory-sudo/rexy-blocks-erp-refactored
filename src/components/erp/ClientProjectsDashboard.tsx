@@ -153,6 +153,17 @@ export default function ClientProjectsDashboard({ role }:{role:"admin"|"manager"
     }catch(e){setError(e instanceof Error?e.message:"Unable to change report visibility.")}
     finally{setBusy(false)}
   }
+  async function removePhoto(photoId:string){
+    if(!selected||busy||!window.confirm("Remove this private photo from the project?"))return;
+    setBusy(true);setError("");setNotice("");
+    try{
+      const response=await fetch("/api/client-projects/"+selected+"/photos/"+photoId,{method:"DELETE"});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||"Photo deletion failed.");
+      setNotice("Photo removed from the private project gallery.");await loadDetail(selected);
+    }catch(e){setError(e instanceof Error?e.message:"Unable to remove photo.")}
+    finally{setBusy(false)}
+  }
   async function upload(files:FileList|null){
     if(!selected||busy||!files?.length)return;
     if(!permission){setError("Confirm these images are approved for private sharing with the owner.");return;}
@@ -300,7 +311,7 @@ export default function ClientProjectsDashboard({ role }:{role:"admin"|"manager"
             <p className="mt-2 text-xs text-[#778678]">JPEG, PNG or WebP. Maximum 4 MB per photo.</p>
             {projectData.photos.length>0&&<div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">{projectData.photos.map(photo=><figure key={photo.id} className="overflow-hidden rounded border">
               <img src={photo.url} alt={photo.caption||"Site photo"} className="aspect-[4/3] w-full object-cover"/>
-              <figcaption className="p-2 text-xs text-[#5e7667]">{photo.caption||"Construction progress"}</figcaption>
+              <figcaption className="p-2 text-xs text-[#5e7667]">{photo.caption||"Construction progress"}</figcaption>{role==="admin"&&<button type="button" disabled={busy} onClick={()=>void removePhoto(photo.id)} className="px-2 pb-3 text-xs font-semibold text-red-800 underline underline-offset-2">Remove photo</button>}
             </figure>)}</div>}
           </section>
         </>}
