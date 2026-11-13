@@ -13,7 +13,7 @@ export async function GET(_request: Request, context: Context) {
         .select("id,name,location,description,status,progress_percent,start_date,target_date,created_at,updated_at")
         .eq("id", id).maybeSingle(),
       supabaseAdmin.from("client_project_updates")
-        .select("id,heading,details,progress_percent,created_at")
+        .select("id,heading,details,progress_percent,created_at,is_visible")
         .eq("project_id", id).order("created_at", { ascending: false }).limit(100),
       supabaseAdmin.from("client_project_milestones")
         .select("id,title,status,due_date,sort_order").eq("project_id", id).order("sort_order").limit(100),
