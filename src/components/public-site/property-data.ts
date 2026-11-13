@@ -10,6 +10,7 @@ export type PublishedProperty = {
   city: string;
   region: string;
   neighborhood: string | null;
+  map_url: string | null;
   construction_status: "completed" | "under_construction" | "unknown";
   price_ghs: number;
   bedrooms: number | null;
@@ -49,6 +50,7 @@ function parseProperty(row: Record<string, unknown>, market: PropertyMarket): Pu
     city: row.city,
     region: row.region,
     neighborhood: typeof row.neighborhood === "string" ? row.neighborhood : null,
+    map_url: typeof row.map_url === "string" ? row.map_url : null,
     construction_status: row.construction_status === "under_construction" ? "under_construction" : row.construction_status === "completed" ? "completed" : "unknown",
     price_ghs: price,
     bedrooms: row.bedrooms == null ? null : Math.max(0, Number(row.bedrooms) || 0),
@@ -112,7 +114,7 @@ export async function getPublishedProperty(market: PropertyMarket, slug: string)
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 120) return null;
   try {
     const db = await createSupabaseServerClient();
-    const { data, error } = await db.from("property_listings").select(fields)
+    const { data, error } = await db.from("property_listings").select(`${fields},map_url` as const)
       .eq("market", market).eq("slug", slug).eq("status", "published")
       .not("verified_at", "is", null).maybeSingle();
     if (error || !data) return null;

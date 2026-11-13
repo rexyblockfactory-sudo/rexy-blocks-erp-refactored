@@ -11,7 +11,7 @@ export async function GET() {
     const staff = await propertyStaff();
     if (!staff) return badRequest("Authorised property staff access required.", 403);
     const { data, error } = await supabaseAdmin.from("property_listings")
-      .select("id,slug,market,status,title,description,city,region,neighborhood,construction_status,price_ghs,bedrooms,bathrooms,max_guests,amenities,photo_urls,verification_notes,verified_at,verified_by,published_at,created_at,updated_at")
+      .select("id,slug,market,status,title,description,city,region,neighborhood,map_url,construction_status,price_ghs,bedrooms,bathrooms,max_guests,amenities,photo_urls,verification_notes,verified_at,verified_by,published_at,created_at,updated_at")
       .order("created_at", { ascending: false }).limit(250);
     if (error) {
       console.error("Property admin list error:", error.message);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { normalizePropertyMapLink } from "@/lib/property-map";
 
 export const PROPERTY_UUID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 export const PROPERTY_ROLES = ["admin", "manager"] as const;
@@ -55,6 +56,7 @@ export function validatePhotoUrls(value: unknown): string[] | null {
 type EditableProperty = {
   market: "sale" | "stay" | "rent"; slug: string; title: string; description: string;
   city: string; region: string; neighborhood: string | null;
+  map_url?: string | null;
   construction_status: string;
   price_ghs: number | null; bedrooms: number | null; bathrooms: number | null;
   max_guests: number | null; photo_urls: string[]; amenities: string[];
@@ -71,6 +73,8 @@ export function parseEditableProperty(value: unknown): EditableProperty | null {
   const region = typeof x.region === "string" ? x.region.trim() : "";
   const description = typeof x.description === "string" ? x.description.trim() : "";
   const neighborhood = typeof x.neighborhood === "string" ? x.neighborhood.trim() : "";
+  const map = normalizePropertyMapLink(x.map_url);
+  if (x.map_url != null && !(typeof x.map_url === "string" && !x.map_url.trim()) && !map) return null;
   const construction = x.construction_status;
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 120 ||
     title.length < 4 || title.length > 160 || city.length < 2 || city.length > 80 ||
@@ -99,6 +103,7 @@ export function parseEditableProperty(value: unknown): EditableProperty | null {
       x.amenities.some((v) => typeof v !== "string" || v.trim().length === 0 || v.length > 80)) return null;
   return {
     market, slug, title, description, city, region, neighborhood: neighborhood || null,
+    ...(x.map_url !== undefined ? { map_url: map?.href ?? null } : {}),
     construction_status: String(construction), price_ghs: price,
     bedrooms: beds, bathrooms: baths, max_guests: market === "stay" ? maxGuests : null,
     photo_urls: photoUrls, amenities: (x.amenities as string[]).map(x => x.trim()),

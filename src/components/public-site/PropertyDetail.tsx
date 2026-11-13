@@ -3,11 +3,14 @@ import { notFound } from "next/navigation";
 import PublicSiteShell from "@/components/public-site/PublicSiteShell";
 import PropertyEnquiryForm from "@/components/public-site/PropertyEnquiryForm";
 import { getPublishedProperty, propertyPrice, type PropertyMarket } from "@/components/public-site/property-data";
+import { publicPropertyMap } from "@/lib/property-map";
 
 export default async function PropertyDetail({ market, slug }: { market: PropertyMarket; slug: string }) {
   const property = await getPublishedProperty(market, slug);
   if (!property) notFound();
   const isStay = market === "stay";
+  const location = [property.neighborhood, property.city, property.region, "Ghana"].filter(Boolean).join(", ");
+  const map = publicPropertyMap(property);
   const browsePath = isStay ? "/rexy-stays" : market === "rent" ? "/rentals" : "/homes-for-sale";
 
   return <PublicSiteShell><main className="rf-mp rf-container rf-mp-detail">
@@ -19,7 +22,7 @@ export default async function PropertyDetail({ market, slug }: { market: Propert
     <div className="rf-mp-detail-heading">
       <p className="rf-eyebrow">VERIFIED {isStay ? "SHORT-STAY LISTING" : market === "rent" ? "PROPERTY FOR RENT" : "PROPERTY FOR SALE"}</p>
       <h1>{property.title}</h1>
-      <p>{property.neighborhood ? property.neighborhood + ", " : ""}{property.city}, {property.region}, Ghana</p>
+      <p>{location}</p>
     </div>
     {property.photo_urls.length > 0 ? (
       <div className={"rf-mp-gallery " + (property.photo_urls.length === 1 ? "rf-mp-gallery-single" : "")}>
@@ -48,6 +51,14 @@ export default async function PropertyDetail({ market, slug }: { market: Propert
           <h2>{isStay ? "Amenities" : "Features"}</h2>
           <ul className="rf-mp-amenities">{property.amenities.map((item, i) => <li key={item + i}>{item}</li>)}</ul>
         </>}
+        <section aria-labelledby="property-location-heading" className="rf-mp-location">
+          <h2 id="property-location-heading">Location</h2>
+          <p>{location}</p>
+          {map.isArea && <p>Map shows the general area. Ask Rexy for the exact location when arranging a viewing or stay.</p>}
+          <a className="rf-mp-map-link" href={map.href}>
+            {map.isArea ? "View area on Google Maps" : "Open in Google Maps"} <span aria-hidden="true">↗</span>
+          </a>
+        </section>
         <div className="rf-mp-due-diligence">
           <h3>Important information</h3>
           <p>{isStay ?

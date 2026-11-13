@@ -60,6 +60,12 @@
 .rf-mp-description h2{font-size:27px;letter-spacing:-.04em;font-weight:600;margin:32px 0 13px}
 .rf-mp-description-text{font-size:14px;line-height:2;color:#536b5b;white-space:pre-line}
 .rf-mp-amenities{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px 25px;padding-left:20px;font-size:13px;color:#536b5b}
+.rf-mp-location{margin-top:32px;padding:20px 23px 23px;border:1px solid var(--rf-mp-line);border-radius:10px;background:#f6f8f4}
+.rf-mp-description .rf-mp-location h2{margin:0 0 9px}
+.rf-mp-location p{font-size:14px;line-height:1.65;color:#536b5b}
+.rf-mp-location p+p{margin-top:4px;font-size:12px}
+.rf-mp-map-link{display:inline-flex;align-items:center;gap:8px;margin-top:14px;min-height:44px;padding:8px 14px;border:1px solid #476450;border-radius:6px;font-weight:650;font-size:13px;color:#254735}
+.rf-mp-map-link:hover{background:#e5eee3}
 .rf-mp-due-diligence{background:#eef2ea;padding:25px;border-left:3px solid #9a7b4b;margin-top:40px}
 .rf-mp-due-diligence h3{font-size:16px;font-weight:700}
 .rf-mp-due-diligence p{font-size:12px;line-height:1.9;margin-top:11px;color:#5e7361}

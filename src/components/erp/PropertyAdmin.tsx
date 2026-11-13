@@ -6,6 +6,7 @@ import Link from "next/link";
 type Listing = {
   id: string; market: "sale" | "rent" | "stay"; slug: string; status: "draft" | "published" | "archived";
   title: string; description: string; city: string; region: string; neighborhood: string | null;
+  map_url: string | null;
   construction_status: string; price_ghs: number | null; bedrooms: number | null; bathrooms: number | null;
   max_guests: number | null; amenities: string[]; photo_urls: string[];
   verified_at: string | null; verified_by: string | null; verification_notes: string | null;
@@ -14,13 +15,13 @@ type Listing = {
 
 type Draft = {
   market: "sale" | "rent" | "stay"; slug: string; title: string; description: string; city: string; region: string;
-  neighborhood: string; construction_status: string; price_ghs: string; bedrooms: string; bathrooms: string;
+  neighborhood: string; map_url: string; construction_status: string; price_ghs: string; bedrooms: string; bathrooms: string;
   max_guests: string; amenities: string; photo_urls: string[];
 };
 
 const emptyDraft: Draft = {
   market: "sale", slug: "", title: "", description: "", city: "", region: "",
-  neighborhood: "", construction_status: "unknown", price_ghs: "", bedrooms: "",
+  neighborhood: "", map_url: "", construction_status: "unknown", price_ghs: "", bedrooms: "",
   bathrooms: "", max_guests: "", amenities: "", photo_urls: [],
 };
 
@@ -29,7 +30,7 @@ const kumasiPreset: Draft = {
   slug: "uncompleted-modern-residence-kumasi",
   title: "Uncompleted Modern Residence — Kumasi",
   description: "Residential building under construction in Kumasi, Ghana. The supplied photographs show a modern multi-level structure, extensive glazed sections and stepped exterior courtyard areas. Construction is unfinished, including portions of the exterior and outdoor facilities. The buyer must inspect the site, verify the land title and approvals, and obtain independent estimates for completion costs. Final layout, room counts, amenities and seller's authority require confirmation; asking price GH₵1,500,000.",
-  city: "Kumasi", region: "Ashanti Region", neighborhood: "",
+  city: "Kumasi", region: "Ashanti Region", neighborhood: "", map_url: "",
   construction_status: "under_construction", price_ghs: "1500000", bedrooms: "",
   bathrooms: "", max_guests: "", amenities: "", photo_urls: [],
 };
@@ -37,7 +38,7 @@ const kumasiPreset: Draft = {
 function toDraft(x: Listing): Draft {
   return {
     market: x.market, slug: x.slug, title: x.title, description: x.description, city: x.city,
-    region: x.region, neighborhood: x.neighborhood ?? "", construction_status: x.construction_status ?? "unknown",
+    region: x.region, neighborhood: x.neighborhood ?? "", map_url: x.map_url ?? "", construction_status: x.construction_status ?? "unknown",
     price_ghs: x.price_ghs == null ? "" : String(x.price_ghs),
     bedrooms: x.bedrooms == null ? "" : String(x.bedrooms),
     bathrooms: x.bathrooms == null ? "" : String(x.bathrooms),
@@ -244,6 +245,10 @@ export default function PropertyAdmin({ role }: { role: "admin" | "manager" }) {
             </label>
             <label className="text-sm font-semibold sm:col-span-2">Neighborhood (optional)
               <input className="mt-1 block w-full rounded-lg border p-3" value={draft.neighborhood} onChange={e => setField("neighborhood", e.target.value)} />
+            </label>
+            <label className="text-sm font-semibold sm:col-span-2">Public Google Maps link (optional)
+              <input type="url" maxLength={2048} className="mt-1 block w-full rounded-lg border p-3" value={draft.map_url} onChange={e => setField("map_url", e.target.value)} placeholder="https://www.google.com/maps/…" />
+              <span className="mt-1 block text-xs font-normal text-slate-600">Leave blank to show the general area. Only add an exact pin if the owner wants it public.</span>
             </label>
             <label className="text-sm font-semibold">Asking price / monthly rent / nightly rate (GH₵)
               <input type="number" min="0.01" step="0.01" className="mt-1 block w-full rounded-lg border p-3" value={draft.price_ghs} onChange={e => setField("price_ghs", e.target.value)} placeholder="May be empty for a draft" />
