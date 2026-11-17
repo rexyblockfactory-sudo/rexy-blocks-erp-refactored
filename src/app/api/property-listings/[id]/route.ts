@@ -6,6 +6,18 @@ import {
 
 type Context = { params: Promise<{ id: string }> };
 
+export async function GET(_request: Request, context: Context) {
+  if (!await propertyStaff()) return badRequest("Authorised property staff access required.", 403);
+  const { id } = await context.params;
+  if (!PROPERTY_UUID.test(id)) return badRequest("Invalid listing ID.");
+  const { data, error } = await supabaseAdmin.from("property_listings")
+    .select("id,slug,market,status,title,description,city,region,neighborhood,construction_status,price_ghs,bedrooms,bathrooms,max_guests,amenities,photo_urls,verification_notes,verified_at,verified_by,published_at,updated_at")
+    .eq("id", id).maybeSingle();
+  if (error) return badRequest("Unable to load property.", 503);
+  if (!data) return badRequest("Property not found.", 404);
+  return NextResponse.json({ listing: data }, { headers: { "Cache-Control": "private, no-store" } });
+}
+
 export async function PATCH(request: Request, context: Context) {
   try {
     const staff = await propertyStaff();
@@ -41,7 +53,7 @@ export async function PATCH(request: Request, context: Context) {
     if (current.status === "published" && staff.role !== "admin") {
       return badRequest("Only administrators may edit published listings.", 403);
     }
-    const input = parseEditableProperty(body);
+    const input = parseEditableProperty(body, id);
     if (!input) return badRequest("Invalid property details. Check all fields.");
     // Any content change revokes verification and unpublishes first.
     const { data, error } = await supabaseAdmin.from("property_listings").update({

@@ -34,7 +34,7 @@ export function verifySameOrigin(request: Request): boolean {
   }
 }
 
-export function validatePhotoUrls(value: unknown): string[] | null {
+export function validatePhotoUrls(value: unknown, listingId?: string): string[] | null {
   if (!Array.isArray(value) || value.length > 16) return null;
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!base) return null;
@@ -42,6 +42,8 @@ export function validatePhotoUrls(value: unknown): string[] | null {
   const photos = value.filter((x): x is string => typeof x === "string");
   if (photos.length !== value.length) return null;
   for (const photo of photos) {
+    const managedPhoto = photo.match(/^\/api\/property-listing-media\/([a-f0-9-]+)\/[0-2]$/);
+    if (managedPhoto && listingId && PROPERTY_UUID.test(listingId) && managedPhoto[1] === listingId) continue;
     if (!(photo.startsWith(uploadedPrefix) &&
       /^https:\/\/[^?#\s"'<>]+$/.test(photo) &&
       /^[a-z0-9-]+\/[a-z0-9-]+\.(webp|png|jpe?g)$/i.test(photo.slice(uploadedPrefix.length))
@@ -60,7 +62,7 @@ type EditableProperty = {
   max_guests: number | null; photo_urls: string[]; amenities: string[];
 };
 
-export function parseEditableProperty(value: unknown): EditableProperty | null {
+export function parseEditableProperty(value: unknown, listingId?: string): EditableProperty | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const x = value as Record<string, unknown>;
   const market = x.market;
@@ -93,7 +95,7 @@ export function parseEditableProperty(value: unknown): EditableProperty | null {
   if (price !== null && price <= 0) return null;
   if (maxGuests !== null && maxGuests < 1) return null;
   if (market === "stay" && maxGuests === null) return null;
-  const photoUrls = validatePhotoUrls(x.photo_urls);
+  const photoUrls = validatePhotoUrls(x.photo_urls, listingId);
   if (!photoUrls) return null;
   if (!Array.isArray(x.amenities) || x.amenities.length > 30 ||
       x.amenities.some((v) => typeof v !== "string" || v.trim().length === 0 || v.length > 80)) return null;

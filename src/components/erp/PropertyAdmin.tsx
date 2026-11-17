@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import PropertySubmissionsQueue from "@/components/erp/PropertySubmissionsQueue";
 
 type Listing = {
   id: string; market: "sale" | "rent" | "stay"; slug: string; status: "draft" | "published" | "archived";
@@ -89,6 +90,20 @@ export default function PropertyAdmin({ role }: { role: "admin" | "manager" }) {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  async function openSubmissionDraft(id: string) {
+    try {
+      const response = await fetch("/api/property-listings/" + id, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok || !data.listing) throw new Error(data.error || "Unable to open the listing draft.");
+      const item: Listing = data.listing;
+      setListings(current => [item, ...current.filter(x => x.id !== item.id)]);
+      select(item);
+      requestAnimationFrame(() => document.getElementById("property-listing-editor")?.scrollIntoView({ block: "start" }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to open the listing draft.");
+    }
+  }
 
   function setField<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft(current => ({ ...current, [key]: value }));
@@ -195,6 +210,8 @@ export default function PropertyAdmin({ role }: { role: "admin" | "manager" }) {
     {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
     {notice && <p role="status" className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">{notice}</p>}
 
+    <PropertySubmissionsQueue role={role} onOpenDraft={openSubmissionDraft} />
+
     <div className="grid gap-6 xl:grid-cols-[minmax(250px,0.7fr)_minmax(0,1.3fr)]">
       <aside className="rounded-xl border bg-white">
         <h2 className="border-b p-4 font-semibold">Property listings ({listings.length})</h2>
@@ -210,7 +227,7 @@ export default function PropertyAdmin({ role }: { role: "admin" | "manager" }) {
         </div>}
       </aside>
 
-      <section className="rounded-xl border bg-white p-5 md:p-7">
+      <section id="property-listing-editor" className="rounded-xl border bg-white p-5 md:p-7">
         <h2 className="text-xl font-bold">{selected ? "Edit property listing" : "Create property draft"}</h2>
         <p className="mb-5 mt-1 text-sm text-gray-500">A draft does not appear on the public website.</p>
         {hasUnsavedChanges && <p role="status" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">Unsaved changes. Save the draft before verifying or publishing this listing.</p>}

@@ -26,7 +26,7 @@ export default function ListYourPropertyPage() {
     <div className="rf-mp-owner-body">
       <section className="rf-mp-owner-panel">
         <h2>Submit your property for review</h2>
-        <p>Initial submissions go to our staff through WhatsApp. No booking, advertisement or payment is created by submitting this form.</p>
+        <p>Your submission goes straight to our private review queue. No account, booking or payment is needed.</p>
         <OwnerSubmissionForm/>
       </section>
       <aside className="rf-mp-owner-aside">

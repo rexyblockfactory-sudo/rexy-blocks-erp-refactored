@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const staffRoles = new Set(["admin", "manager", "operator", "accountant"]);
 
-type StaffAccess = { status: "staff"; role: string } | { status: "signed-out" | "denied" };
+type StaffAccess = { status: "staff"; role: string; userId: string } | { status: "signed-out" | "denied" };
 
 export const getStaffAccess = cache(async (): Promise<StaffAccess> => {
   const session = await createSupabaseServerClient();
@@ -17,5 +17,5 @@ export const getStaffAccess = cache(async (): Promise<StaffAccess> => {
     return { status: "denied" };
   }
   const role = profile?.role;
-  return typeof role === "string" && staffRoles.has(role) ? { status: "staff", role } : { status: "denied" };
+  return typeof role === "string" && staffRoles.has(role) ? { status: "staff", role, userId: user.id } : { status: "denied" };
 });

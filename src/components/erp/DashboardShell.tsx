@@ -25,6 +25,7 @@ const groups = [
   { label: "People", links: [{ label: "Payroll & labour", href: "/payroll", icon: Wallet }] },
 ];
 
+const projectsGroup = { label: "Client Projects", links: [{ label: "Project progress", href: "/client-projects", icon: ClipboardList }] };
 const propertyGroup = { label: "Real Estate", links: [{ label: "Property management", href: "/property-management", icon: Building2 }] };
 const adminGroup = { label: "Administration", links: [{ label: "Employees", href: "/employees", icon: Users }] };
 const pageTitles: Record<string, string> = { financials: "Financials", receivables: "Receivables", expenses: "Expenses", reports: "Reports", payments: "Payments", settings: "Settings" };
@@ -41,7 +42,7 @@ export default function DashboardShell({ children, userRole }: {
   const menuOpen = mobileMenuPath === pathname;
   const isAdmin = userRole === "admin";
   const isPropertyStaff = isAdmin || userRole === "manager";
-  const sections = [...groups, ...(isPropertyStaff ? [propertyGroup] : []), ...(isAdmin ? [adminGroup] : [])];
+  const sections = [...groups, ...(isPropertyStaff ? [propertyGroup, projectsGroup] : []), ...(isAdmin ? [adminGroup] : [])];
   const activeLink = sections.flatMap(group => group.links)
     .filter(link => pathname === link.href || pathname.startsWith(link.href + "/"))
     .sort((a, b) => b.href.length - a.href.length)[0];
