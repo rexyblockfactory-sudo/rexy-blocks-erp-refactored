@@ -117,6 +117,7 @@ export async function createSale(
 ): Promise<{
   data: Sale | null;
   error: Error | null;
+  outcomeUnknown?: boolean;
 }> {
   // ------------------------------------------------------------
   // VALIDATION
@@ -179,6 +180,7 @@ export async function createSale(
   const {
     data,
     error,
+    status,
   } = await supabase.rpc(
     "create_sale_with_current_price",
     {
@@ -208,6 +210,7 @@ export async function createSale(
 
     return {
       data: null,
+      outcomeUnknown: status === 0 || status >= 500,
       error: new Error(
         error.message
       ),
@@ -218,9 +221,11 @@ export async function createSale(
   // NO SALE RETURNED
   // ------------------------------------------------------------
 
-  if (!data) {
+  const sale = Array.isArray(data) && data.length === 1 ? data[0] : data;
+  if (typeof sale?.id !== "string" || !sale.id.trim()) {
     return {
       data: null,
+      outcomeUnknown: true,
       error: new Error(
         "Sale was created, but no sale record was returned."
       ),
@@ -232,7 +237,7 @@ export async function createSale(
   // ------------------------------------------------------------
 
   return {
-    data: data as Sale,
+    data: sale as Sale,
     error: null,
   };
 }

@@ -250,7 +250,7 @@ export default function SalesPage() {
 
         <div className="flex flex-wrap gap-3">
           <Link
-            href="/sales/new"
+            href="/sales/pos"
             className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
           >
             New Sale
@@ -424,7 +424,7 @@ export default function SalesPage() {
               </p>
 
               <Link
-                href="/sales/new"
+                href="/sales/pos"
                 className="mt-4 inline-block rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
               >
                 Create Sale

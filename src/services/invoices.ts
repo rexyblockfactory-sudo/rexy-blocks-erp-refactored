@@ -19,6 +19,7 @@ export interface Invoice {
 
 export interface InvoiceWithSale
   extends Invoice {
+  paymentDetailsUnavailable: boolean;
   amount_paid: number;
   balance_due: number;
   payment_method: string;
@@ -55,6 +56,7 @@ function mapInvoice(
     sale_id: invoice.sale_id || null,
     created_at: invoice.created_at,
 
+    paymentDetailsUnavailable: Boolean(invoice.sale_id && !sale),
     amount_paid: Number(
       sale?.amount_paid || 0
     ),
@@ -72,14 +74,14 @@ function mapInvoice(
    GET ALL INVOICES
 ========================================================= */
 
-export async function getInvoices(): Promise<{
+export async function getInvoices(client: typeof supabase): Promise<{
   data: InvoiceWithSale[] | null;
   error: Error | null;
 }> {
   const {
     data: invoices,
     error,
-  } = await supabase
+  } = await client
     .from("invoices")
     .select(`
       id,
@@ -145,7 +147,7 @@ export async function getInvoices(): Promise<{
     const {
       data: sales,
       error: salesError,
-    } = await supabase
+    } = await client
       .from("sales")
       .select(`
         id,
@@ -155,7 +157,7 @@ export async function getInvoices(): Promise<{
       `)
       .in("id", saleIds);
 
-    if (salesError) {
+    if (salesError && salesError.code !== "42501") {
       console.error(
         "getInvoices sales error:",
         salesError.message,
@@ -348,177 +350,41 @@ export async function getInvoiceByNumber(
 ========================================================= */
 
 export async function getInvoiceById(
-  value: string
+  value: string,
+  client: typeof supabase,
+  lookup: "invoice" | "sale" = "invoice"
 ): Promise<{
   data: InvoiceWithSale | null;
   error: Error | null;
 }> {
-  if (!value?.trim()) {
-    return {
-      data: null,
-      error: new Error(
-        "Invoice ID or invoice number is required."
-      ),
-    };
+  const lookupValue = value.trim();
+  const isUuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lookupValue);
+
+  if (!lookupValue || (lookup === "sale" && !isUuid)) {
+    return { data: null, error: new Error("A valid invoice or sale reference is required.") };
   }
 
-  const lookupValue =
-    value.trim();
+  const column = lookup === "sale" ? "sale_id" : isUuid ? "id" : "invoice_number";
+  const { data, error } = await client
+    .from("invoices")
+    .select("id, invoice_number, customer_name, product_name, quantity, unit_price, total_amount, payment_status, sale_id, created_at")
+    .eq(column, lookupValue)
+    .order("created_at", { ascending: false })
+    .limit(1);
 
-  /*
-   * UUID validation.
-   *
-   * This is important because invoices.id
-   * is a PostgreSQL UUID column.
-   */
-
-  const uuidRegex =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-  const isUuid =
-    uuidRegex.test(
-      lookupValue
-    );
-
-  console.log(
-    "getInvoiceById lookup:",
-    {
-      value: lookupValue,
-      isUuid,
-    }
-  );
-
-  let invoice: any = null;
-
-  /* =======================================================
-     UUID LOOKUP
-  ======================================================= */
-
-  if (isUuid) {
-    const {
-      data,
-      error,
-    } = await supabase
-      .from("invoices")
-      .select(`
-        id,
-        invoice_number,
-        customer_name,
-        product_name,
-        quantity,
-        unit_price,
-        total_amount,
-        payment_status,
-        sale_id,
-        created_at
-      `)
-      .eq(
-        "id",
-        lookupValue
-      )
-      .limit(1);
-
-    console.log(
-      "Invoice UUID lookup result:",
-      {
-        lookupValue,
-        data,
-        count: data?.length ?? 0,
-        error,
-      }
-    );
-
-    if (error) {
-      console.error(
-        "getInvoiceById UUID error:",
-        error.message,
-        error.details,
-        error.hint,
-        error.code
-      );
-
-      return {
-        data: null,
-        error: new Error(
-          error.message ||
-            "Unable to load invoice."
-        ),
-      };
-    }
-
-    invoice =
-      data?.[0] || null;
+  if (error) {
+    return { data: null, error: new Error(error.message || "Unable to load invoice.") };
   }
 
-  /* =======================================================
-     INVOICE NUMBER LOOKUP
-  ======================================================= */
-
-  else {
-    const {
-      data,
-      error,
-    } = await supabase
-      .from("invoices")
-      .select(`
-        id,
-        invoice_number,
-        customer_name,
-        product_name,
-        quantity,
-        unit_price,
-        total_amount,
-        payment_status,
-        sale_id,
-        created_at
-      `)
-      .eq(
-        "invoice_number",
-        lookupValue
-      )
-      .limit(1);
-
-    console.log(
-      "Invoice number lookup result:",
-      {
-        lookupValue,
-        data,
-        count: data?.length ?? 0,
-        error,
-      }
-    );
-
-    if (error) {
-      console.error(
-        "getInvoiceById invoice-number error:",
-        error.message,
-        error.details,
-        error.hint,
-        error.code
-      );
-
-      return {
-        data: null,
-        error: new Error(
-          error.message ||
-            "Unable to load invoice."
-        ),
-      };
-    }
-
-    invoice =
-      data?.[0] || null;
-  }
-
-  /* =======================================================
-     INVOICE NOT FOUND
-  ======================================================= */
+  const invoice = data?.[0];
 
   if (!invoice) {
     return {
       data: null,
       error: new Error(
-        `Invoice "${lookupValue}" was not found.`
+        lookup === "sale"
+          ? "No invoice is available for this sale yet. Check Invoice History or refresh this page."
+          : `Invoice "${lookupValue}" was not found.`
       ),
     };
   }
@@ -544,7 +410,7 @@ export async function getInvoiceById(
   const {
     data: sales,
     error: saleError,
-  } = await supabase
+  } = await client
     .from("sales")
     .select(`
       id,
@@ -558,7 +424,7 @@ export async function getInvoiceById(
     )
     .limit(1);
 
-  if (saleError) {
+  if (saleError && saleError.code !== "42501") {
     console.error(
       "getInvoiceById sale error:",
       saleError.message,
@@ -599,7 +465,8 @@ export async function getInvoiceById(
 ========================================================= */
 
 export async function getInvoicePayments(
-  saleId: string
+  saleId: string,
+  client: typeof supabase
 ): Promise<{
   data: SalePayment[] | null;
   error: Error | null;
@@ -614,7 +481,7 @@ export async function getInvoicePayments(
   const {
     data,
     error,
-  } = await supabase
+  } = await client
     .from("sale_payments")
     .select(`
       id,
