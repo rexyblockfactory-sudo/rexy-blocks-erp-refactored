@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase/client";
 const groups = [
   { label: "Workspace", links: [{ label: "Overview", href: "/dashboard", icon: LayoutDashboard }] },
   { label: "Sales", links: [
+    { label: "Point of sale", href: "/sales/pos", icon: ReceiptText },
     { label: "New sale", href: "/sales/new", icon: ReceiptText },
     { label: "Sales overview", href: "/sales", icon: Wallet },
     { label: "Sales history", href: "/sales/history", icon: ClipboardList },

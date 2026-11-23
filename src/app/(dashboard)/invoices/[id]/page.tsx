@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import {
   getInvoiceById,
@@ -108,15 +110,18 @@ function statusClass(
 
 export default async function InvoiceDetailPage({
   params,
+  searchParams,
 }: {
+  searchParams: Promise<{ lookup?: string | string[] }>;
   params: Promise<{
     id: string;
   }>;
 }) {
-  const { id } = await params;
+  const [{ id }, { lookup }] = await Promise.all([params, searchParams]);
 
-  const invoiceId =
-    decodeURIComponent(id);
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
   /* =======================================================
      LOAD INVOICE
@@ -124,7 +129,9 @@ export default async function InvoiceDetailPage({
 
   const invoiceResult =
     await getInvoiceById(
-      invoiceId
+      id,
+      supabase,
+      lookup === "sale" ? "sale" : "invoice"
     );
 
   /* =======================================================
@@ -200,7 +207,8 @@ export default async function InvoiceDetailPage({
   const paymentsResult =
     invoice.sale_id
       ? await getInvoicePayments(
-          invoice.sale_id
+          invoice.sale_id,
+          supabase
         )
       : {
           data: [],
@@ -229,8 +237,9 @@ export default async function InvoiceDetailPage({
       invoice.balance_due || 0
     );
 
-  const status =
-    getStatus(
+  const status = invoice.paymentDetailsUnavailable
+    ? invoice.payment_status || "Unavailable"
+    : getStatus(
       total,
       paid,
       balance
@@ -451,7 +460,7 @@ export default async function InvoiceDetailPage({
                 </span>
 
                 <span className="font-semibold text-green-600">
-                  {money(paid)}
+                  {invoice.paymentDetailsUnavailable ? "Unavailable" : money(paid)}
                 </span>
 
               </div>
@@ -471,7 +480,7 @@ export default async function InvoiceDetailPage({
                         : "text-green-600"
                     }`}
                   >
-                    {money(balance)}
+                    {invoice.paymentDetailsUnavailable ? "Unavailable" : money(balance)}
                   </span>
 
                 </div>
@@ -517,7 +526,7 @@ export default async function InvoiceDetailPage({
               </p>
 
               <p className="mt-1 font-medium text-green-600">
-                {money(paid)}
+                {invoice.paymentDetailsUnavailable ? "Unavailable" : money(paid)}
               </p>
 
             </div>
@@ -529,7 +538,7 @@ export default async function InvoiceDetailPage({
               </p>
 
               <p className="mt-1 font-medium text-red-600">
-                {money(balance)}
+                {invoice.paymentDetailsUnavailable ? "Unavailable" : money(balance)}
               </p>
 
             </div>
@@ -549,7 +558,9 @@ export default async function InvoiceDetailPage({
             Payment History
           </h2>
 
-          {payments.length === 0 ? (
+          {paymentsResult.error ? (
+            <p className="mt-4 text-sm text-gray-500">Payment history is unavailable.</p>
+          ) : payments.length === 0 ? (
 
             <p className="mt-4 text-sm text-gray-500">
               No separate payment transactions
