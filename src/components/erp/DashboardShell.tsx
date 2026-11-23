@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Boxes, Building2, ClipboardList, Factory, LayoutDashboard, LogOut, Menu, Package, ReceiptText, Users, Wallet, X } from "lucide-react";
+import { canManageSupplierCredit } from "@/lib/supplier-credit";
 import { supabase } from "@/lib/supabase/client";
 
 const groups = [
@@ -21,6 +22,7 @@ const groups = [
     { label: "New production", href: "/production", icon: Factory },
     { label: "Production history", href: "/production/history", icon: ClipboardList },
     { label: "Inventory", href: "/inventory", icon: Boxes },
+    { label: "Supplier credit", href: "/inventory/supplier-credit", icon: ReceiptText },
     { label: "Products", href: "/products", icon: Package },
   ] },
   { label: "People", links: [{ label: "Payroll & labour", href: "/payroll", icon: Wallet }] },
@@ -42,7 +44,10 @@ export default function DashboardShell({ children, userRole }: {
   const menuOpen = mobileMenuPath === pathname;
   const isAdmin = userRole === "admin";
   const isPropertyStaff = isAdmin || userRole === "manager";
-  const sections = [...groups, ...(isPropertyStaff ? [propertyGroup] : []), ...(isAdmin ? [adminGroup] : [])];
+  const availableGroups = groups.map(group => ({ ...group, links: group.links.filter(link =>
+    link.href !== "/inventory/supplier-credit" || canManageSupplierCredit(userRole)
+  ) }));
+  const sections = [...availableGroups, ...(isPropertyStaff ? [propertyGroup] : []), ...(isAdmin ? [adminGroup] : [])];
   const activeLink = sections.flatMap(group => group.links)
     .filter(link => pathname === link.href || pathname.startsWith(link.href + "/"))
     .sort((a, b) => b.href.length - a.href.length)[0];
