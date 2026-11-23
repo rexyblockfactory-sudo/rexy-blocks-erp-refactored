@@ -348,7 +348,8 @@ export async function getInvoiceByNumber(
 ========================================================= */
 
 export async function getInvoiceById(
-  value: string
+  value: string,
+  client: typeof supabase
 ): Promise<{
   data: InvoiceWithSale | null;
   error: Error | null;
@@ -398,7 +399,7 @@ export async function getInvoiceById(
     const {
       data,
       error,
-    } = await supabase
+    } = await client
       .from("invoices")
       .select(`
         id,
@@ -458,7 +459,7 @@ export async function getInvoiceById(
     const {
       data,
       error,
-    } = await supabase
+    } = await client
       .from("invoices")
       .select(`
         id,
@@ -544,7 +545,7 @@ export async function getInvoiceById(
   const {
     data: sales,
     error: saleError,
-  } = await supabase
+  } = await client
     .from("sales")
     .select(`
       id,
@@ -599,7 +600,8 @@ export async function getInvoiceById(
 ========================================================= */
 
 export async function getInvoicePayments(
-  saleId: string
+  saleId: string,
+  client: typeof supabase
 ): Promise<{
   data: SalePayment[] | null;
   error: Error | null;
@@ -614,7 +616,7 @@ export async function getInvoicePayments(
   const {
     data,
     error,
-  } = await supabase
+  } = await client
     .from("sale_payments")
     .select(`
       id,

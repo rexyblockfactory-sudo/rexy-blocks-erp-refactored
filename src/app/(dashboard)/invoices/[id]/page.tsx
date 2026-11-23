@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import {
   getInvoiceById,
@@ -115,6 +116,7 @@ export default async function InvoiceDetailPage({
 }) {
   const { id } = await params;
 
+  const supabase = await createSupabaseServerClient();
   const invoiceId =
     decodeURIComponent(id);
 
@@ -124,7 +126,8 @@ export default async function InvoiceDetailPage({
 
   const invoiceResult =
     await getInvoiceById(
-      invoiceId
+      invoiceId,
+      supabase
     );
 
   /* =======================================================
@@ -200,7 +203,8 @@ export default async function InvoiceDetailPage({
   const paymentsResult =
     invoice.sale_id
       ? await getInvoicePayments(
-          invoice.sale_id
+          invoice.sale_id,
+          supabase
         )
       : {
           data: [],
