@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import {
@@ -142,10 +143,14 @@ function StatusBadge({
 ========================================================= */
 
 export default async function InvoiceHistoryPage() {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
   const {
     data,
     error,
-  } = await getInvoices(await createSupabaseServerClient());
+  } = await getInvoices(supabase);
 
   /* =======================================================
      ERROR

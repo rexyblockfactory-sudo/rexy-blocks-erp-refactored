@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import {
@@ -119,6 +120,8 @@ export default async function InvoiceDetailPage({
   const [{ id }, { lookup }] = await Promise.all([params, searchParams]);
 
   const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
   /* =======================================================
      LOAD INVOICE
