@@ -29,8 +29,8 @@ const navigation: NavSection[] = [
     label: "Sales",
     items: [
       {
-        label: "New Sale",
-        href: "/sales/new",
+        label: "Point of Sale",
+        href: "/sales/pos",
       },
       {
         label: "Sales Overview",
@@ -113,7 +113,7 @@ const employeeNavigation: NavSection = {
 };
 
 function isActivePath(pathname: string, href: string): boolean {
-  if (href === "/dashboard") {
+  if (href === "/dashboard" || href === "/sales") {
     return pathname === "/dashboard";
   }
 
@@ -122,6 +122,7 @@ function isActivePath(pathname: string, href: string): boolean {
 
 function getPageTitle(pathname: string): string {
   if (pathname === "/dashboard") return "Dashboard";
+  if (pathname === "/sales/pos") return "Point of Sale";
   if (pathname.startsWith("/sales")) return "Sales";
   if (pathname.startsWith("/production")) return "Production";
   if (pathname.startsWith("/inventory")) return "Inventory";

@@ -320,7 +320,7 @@ export default function SalesHistoryPage() {
     </Link>
 
     <Link
-      href="/sales/new"
+      href="/sales/pos"
       className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
     >
       New Sale
