@@ -284,9 +284,7 @@ export async function getInvoiceByNumber(
     return {
       data: null,
       error: new Error(
-        lookup === "sale"
-          ? "No invoice is available for this sale yet. Check Invoice History or refresh this page."
-          : `Invoice "${lookupValue}" was not found.`
+        `Invoice "${lookupValue}" was not found.`
       ),
     };
   }
