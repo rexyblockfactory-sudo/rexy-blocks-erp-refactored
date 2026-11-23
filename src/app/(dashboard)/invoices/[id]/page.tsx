@@ -234,8 +234,9 @@ export default async function InvoiceDetailPage({
       invoice.balance_due || 0
     );
 
-  const status =
-    getStatus(
+  const status = invoice.paymentDetailsUnavailable
+    ? invoice.payment_status || "Unavailable"
+    : getStatus(
       total,
       paid,
       balance
@@ -456,7 +457,7 @@ export default async function InvoiceDetailPage({
                 </span>
 
                 <span className="font-semibold text-green-600">
-                  {money(paid)}
+                  {invoice.paymentDetailsUnavailable ? "Unavailable" : money(paid)}
                 </span>
 
               </div>
@@ -476,7 +477,7 @@ export default async function InvoiceDetailPage({
                         : "text-green-600"
                     }`}
                   >
-                    {money(balance)}
+                    {invoice.paymentDetailsUnavailable ? "Unavailable" : money(balance)}
                   </span>
 
                 </div>
@@ -522,7 +523,7 @@ export default async function InvoiceDetailPage({
               </p>
 
               <p className="mt-1 font-medium text-green-600">
-                {money(paid)}
+                {invoice.paymentDetailsUnavailable ? "Unavailable" : money(paid)}
               </p>
 
             </div>
@@ -534,7 +535,7 @@ export default async function InvoiceDetailPage({
               </p>
 
               <p className="mt-1 font-medium text-red-600">
-                {money(balance)}
+                {invoice.paymentDetailsUnavailable ? "Unavailable" : money(balance)}
               </p>
 
             </div>
@@ -554,7 +555,9 @@ export default async function InvoiceDetailPage({
             Payment History
           </h2>
 
-          {payments.length === 0 ? (
+          {paymentsResult.error ? (
+            <p className="mt-4 text-sm text-gray-500">Payment history is unavailable.</p>
+          ) : payments.length === 0 ? (
 
             <p className="mt-4 text-sm text-gray-500">
               No separate payment transactions

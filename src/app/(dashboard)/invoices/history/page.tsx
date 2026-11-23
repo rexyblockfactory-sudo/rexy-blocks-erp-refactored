@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import {
   getInvoices,
@@ -54,6 +55,8 @@ function formatDate(value: string) {
 function getStatus(
   invoice: InvoiceWithSale
 ) {
+  if (invoice.paymentDetailsUnavailable) return invoice.payment_status || "Unavailable";
+
   const total =
     Number(invoice.total_amount || 0);
 
@@ -142,7 +145,7 @@ export default async function InvoiceHistoryPage() {
   const {
     data,
     error,
-  } = await getInvoices();
+  } = await getInvoices(await createSupabaseServerClient());
 
   /* =======================================================
      ERROR
@@ -194,6 +197,8 @@ export default async function InvoiceHistoryPage() {
         ),
       0
     );
+
+  const hasUnavailablePayments = invoices.some((invoice) => invoice.paymentDetailsUnavailable);
 
   const totalPaid =
     invoices.reduce(
@@ -289,7 +294,7 @@ export default async function InvoiceHistoryPage() {
           </p>
 
           <p className="mt-2 text-2xl font-bold text-green-600">
-            {money(totalPaid)}
+            {hasUnavailablePayments ? "Unavailable" : money(totalPaid)}
           </p>
 
           <p className="mt-1 text-sm text-gray-500">
@@ -306,7 +311,7 @@ export default async function InvoiceHistoryPage() {
           </p>
 
           <p className="mt-2 text-2xl font-bold text-red-600">
-            {money(totalOutstanding)}
+            {hasUnavailablePayments ? "Unavailable" : money(totalOutstanding)}
           </p>
 
           <p className="mt-1 text-sm text-gray-500">
@@ -323,7 +328,7 @@ export default async function InvoiceHistoryPage() {
           </p>
 
           <p className="mt-2 text-2xl font-bold">
-            {outstandingInvoices}
+            {hasUnavailablePayments ? "Unavailable" : outstandingInvoices}
           </p>
 
           <p className="mt-1 text-sm text-gray-500">
@@ -485,12 +490,7 @@ export default async function InvoiceHistoryPage() {
                         </td>
 
                         <td className="whitespace-nowrap p-4 text-right font-medium text-green-600">
-                          {money(
-                            Number(
-                              invoice.amount_paid ||
-                                0
-                            )
-                          )}
+                          {invoice.paymentDetailsUnavailable ? "Unavailable" : money(invoice.amount_paid)}
                         </td>
 
                         <td
@@ -503,12 +503,7 @@ export default async function InvoiceHistoryPage() {
                               : "text-green-600"
                           }`}
                         >
-                          {money(
-                            Number(
-                              invoice.balance_due ||
-                                0
-                            )
-                          )}
+                          {invoice.paymentDetailsUnavailable ? "Unavailable" : money(invoice.balance_due)}
                         </td>
 
                         <td className="whitespace-nowrap p-4">

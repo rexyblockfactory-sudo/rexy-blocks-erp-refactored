@@ -19,6 +19,7 @@ export interface Invoice {
 
 export interface InvoiceWithSale
   extends Invoice {
+  paymentDetailsUnavailable: boolean;
   amount_paid: number;
   balance_due: number;
   payment_method: string;
@@ -55,6 +56,7 @@ function mapInvoice(
     sale_id: invoice.sale_id || null,
     created_at: invoice.created_at,
 
+    paymentDetailsUnavailable: Boolean(invoice.sale_id && !sale),
     amount_paid: Number(
       sale?.amount_paid || 0
     ),
@@ -72,14 +74,14 @@ function mapInvoice(
    GET ALL INVOICES
 ========================================================= */
 
-export async function getInvoices(): Promise<{
+export async function getInvoices(client: typeof supabase): Promise<{
   data: InvoiceWithSale[] | null;
   error: Error | null;
 }> {
   const {
     data: invoices,
     error,
-  } = await supabase
+  } = await client
     .from("invoices")
     .select(`
       id,
@@ -145,7 +147,7 @@ export async function getInvoices(): Promise<{
     const {
       data: sales,
       error: salesError,
-    } = await supabase
+    } = await client
       .from("sales")
       .select(`
         id,
@@ -155,7 +157,7 @@ export async function getInvoices(): Promise<{
       `)
       .in("id", saleIds);
 
-    if (salesError) {
+    if (salesError && salesError.code !== "42501") {
       console.error(
         "getInvoices sales error:",
         salesError.message,
@@ -422,7 +424,7 @@ export async function getInvoiceById(
     )
     .limit(1);
 
-  if (saleError) {
+  if (saleError && saleError.code !== "42501") {
     console.error(
       "getInvoiceById sale error:",
       saleError.message,
