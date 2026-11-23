@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 
-import { supabase } from "@/lib/supabase/client";
 import { createSale } from "@/services/sales";
 import type { Product } from "@/types/product";
 import type { Sale } from "@/types/sale";
@@ -36,7 +35,6 @@ export default function Checkout({ products, customers }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [sale, setSale] = useState<Sale | null>(null);
-  const [invoiceId, setInvoiceId] = useState<string | null>(null);
   const [uncertain, setUncertain] = useState(false);
   const submitting = useRef(false);
 
@@ -75,13 +73,6 @@ export default function Checkout({ products, customers }: {
       }
 
       setSale(result.data);
-      const { data: invoice } = await supabase
-        .from("invoices")
-        .select("id")
-        .eq("sale_id", result.data.id)
-        .maybeSingle();
-
-      setInvoiceId(invoice?.id ?? null);
     } catch {
       setUncertain(true);
       setError("The connection was interrupted.");
@@ -93,7 +84,6 @@ export default function Checkout({ products, customers }: {
 
   function startNextSale() {
     setSale(null);
-    setInvoiceId(null);
     setSearch("");
     setProductId("");
     setCustomer("");
@@ -146,9 +136,9 @@ export default function Checkout({ products, customers }: {
               <dt>Amount paid</dt><dd className="text-right">{money.format(sale.amount_paid)}</dd>
               <dt>Balance due</dt><dd className="text-right">{money.format(sale.balance_due)}</dd>
             </dl>
-            <Link href={invoiceId ? `/invoices/${invoiceId}` : "/invoices"}
+            <Link href={`/invoices/${encodeURIComponent(sale.id)}?lookup=sale`} prefetch={false}
               className="block rounded-xl border border-slate-300 px-4 py-3 text-center font-semibold hover:bg-slate-50">
-              {invoiceId ? "View or print invoice" : "Open invoices"}
+              View or print invoice
             </Link>
             <button type="button" onClick={startNextSale} disabled={saving} className={primary}>
               Start next sale

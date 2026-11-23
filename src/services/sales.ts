@@ -221,7 +221,8 @@ export async function createSale(
   // NO SALE RETURNED
   // ------------------------------------------------------------
 
-  if (!data) {
+  const sale = Array.isArray(data) && data.length === 1 ? data[0] : data;
+  if (typeof sale?.id !== "string" || !sale.id.trim()) {
     return {
       data: null,
       outcomeUnknown: true,
@@ -236,7 +237,7 @@ export async function createSale(
   // ------------------------------------------------------------
 
   return {
-    data: data as Sale,
+    data: sale as Sale,
     error: null,
   };
 }

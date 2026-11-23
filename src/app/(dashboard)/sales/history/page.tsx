@@ -489,6 +489,13 @@ export default function SalesHistoryPage() {
                             Complete
                           </span>
                         )}
+                        <Link
+                          href={`/invoices/${encodeURIComponent(sale.id)}?lookup=sale`}
+                          prefetch={false}
+                          className="ml-3 font-medium text-blue-700 hover:underline"
+                        >
+                          View invoice
+                        </Link>
                       </td>
 
                       <td className="whitespace-nowrap p-3">

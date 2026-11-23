@@ -109,16 +109,16 @@ function statusClass(
 
 export default async function InvoiceDetailPage({
   params,
+  searchParams,
 }: {
+  searchParams: Promise<{ lookup?: string | string[] }>;
   params: Promise<{
     id: string;
   }>;
 }) {
-  const { id } = await params;
+  const [{ id }, { lookup }] = await Promise.all([params, searchParams]);
 
   const supabase = await createSupabaseServerClient();
-  const invoiceId =
-    decodeURIComponent(id);
 
   /* =======================================================
      LOAD INVOICE
@@ -126,8 +126,9 @@ export default async function InvoiceDetailPage({
 
   const invoiceResult =
     await getInvoiceById(
-      invoiceId,
-      supabase
+      id,
+      supabase,
+      lookup === "sale" ? "sale" : "invoice"
     );
 
   /* =======================================================

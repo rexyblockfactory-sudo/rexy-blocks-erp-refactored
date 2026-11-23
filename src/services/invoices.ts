@@ -284,7 +284,9 @@ export async function getInvoiceByNumber(
     return {
       data: null,
       error: new Error(
-        `Invoice "${lookupValue}" was not found.`
+        lookup === "sale"
+          ? "No invoice is available for this sale yet. Check Invoice History or refresh this page."
+          : `Invoice "${lookupValue}" was not found.`
       ),
     };
   }
@@ -349,177 +351,40 @@ export async function getInvoiceByNumber(
 
 export async function getInvoiceById(
   value: string,
-  client: typeof supabase
+  client: typeof supabase,
+  lookup: "invoice" | "sale" = "invoice"
 ): Promise<{
   data: InvoiceWithSale | null;
   error: Error | null;
 }> {
-  if (!value?.trim()) {
-    return {
-      data: null,
-      error: new Error(
-        "Invoice ID or invoice number is required."
-      ),
-    };
+  const lookupValue = value.trim();
+  const isUuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(lookupValue);
+
+  if (!lookupValue || (lookup === "sale" && !isUuid)) {
+    return { data: null, error: new Error("A valid invoice or sale reference is required.") };
   }
 
-  const lookupValue =
-    value.trim();
+  const column = lookup === "sale" ? "sale_id" : isUuid ? "id" : "invoice_number";
+  const { data, error } = await client
+    .from("invoices")
+    .select("id, invoice_number, customer_name, product_name, quantity, unit_price, total_amount, payment_status, sale_id, created_at")
+    .eq(column, lookupValue)
+    .order("created_at", { ascending: false })
+    .limit(1);
 
-  /*
-   * UUID validation.
-   *
-   * This is important because invoices.id
-   * is a PostgreSQL UUID column.
-   */
-
-  const uuidRegex =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-  const isUuid =
-    uuidRegex.test(
-      lookupValue
-    );
-
-  console.log(
-    "getInvoiceById lookup:",
-    {
-      value: lookupValue,
-      isUuid,
-    }
-  );
-
-  let invoice: any = null;
-
-  /* =======================================================
-     UUID LOOKUP
-  ======================================================= */
-
-  if (isUuid) {
-    const {
-      data,
-      error,
-    } = await client
-      .from("invoices")
-      .select(`
-        id,
-        invoice_number,
-        customer_name,
-        product_name,
-        quantity,
-        unit_price,
-        total_amount,
-        payment_status,
-        sale_id,
-        created_at
-      `)
-      .eq(
-        "id",
-        lookupValue
-      )
-      .limit(1);
-
-    console.log(
-      "Invoice UUID lookup result:",
-      {
-        lookupValue,
-        data,
-        count: data?.length ?? 0,
-        error,
-      }
-    );
-
-    if (error) {
-      console.error(
-        "getInvoiceById UUID error:",
-        error.message,
-        error.details,
-        error.hint,
-        error.code
-      );
-
-      return {
-        data: null,
-        error: new Error(
-          error.message ||
-            "Unable to load invoice."
-        ),
-      };
-    }
-
-    invoice =
-      data?.[0] || null;
+  if (error) {
+    return { data: null, error: new Error(error.message || "Unable to load invoice.") };
   }
 
-  /* =======================================================
-     INVOICE NUMBER LOOKUP
-  ======================================================= */
-
-  else {
-    const {
-      data,
-      error,
-    } = await client
-      .from("invoices")
-      .select(`
-        id,
-        invoice_number,
-        customer_name,
-        product_name,
-        quantity,
-        unit_price,
-        total_amount,
-        payment_status,
-        sale_id,
-        created_at
-      `)
-      .eq(
-        "invoice_number",
-        lookupValue
-      )
-      .limit(1);
-
-    console.log(
-      "Invoice number lookup result:",
-      {
-        lookupValue,
-        data,
-        count: data?.length ?? 0,
-        error,
-      }
-    );
-
-    if (error) {
-      console.error(
-        "getInvoiceById invoice-number error:",
-        error.message,
-        error.details,
-        error.hint,
-        error.code
-      );
-
-      return {
-        data: null,
-        error: new Error(
-          error.message ||
-            "Unable to load invoice."
-        ),
-      };
-    }
-
-    invoice =
-      data?.[0] || null;
-  }
-
-  /* =======================================================
-     INVOICE NOT FOUND
-  ======================================================= */
+  const invoice = data?.[0];
 
   if (!invoice) {
     return {
       data: null,
       error: new Error(
-        `Invoice "${lookupValue}" was not found.`
+        lookup === "sale"
+          ? "No invoice is available for this sale yet. Check Invoice History or refresh this page."
+          : `Invoice "${lookupValue}" was not found.`
       ),
     };
   }
