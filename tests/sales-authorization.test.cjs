@@ -25,7 +25,14 @@ test('sales RPC rejects missing/null/unauthorized roles before changing stock', 
         id uuid default gen_random_uuid(), customer_name text, product_name text,
         quantity integer, unit_price numeric, total_amount numeric,
         payment_method text, amount_paid numeric, balance_due numeric,
-        cost_per_unit numeric, cogs numeric, gross_profit numeric, gross_margin numeric
+        cost_per_unit numeric, cogs numeric, gross_profit numeric, gross_margin numeric,
+        delivery_charge numeric, additional_charges numeric
+      );
+      create table invoices (
+        invoice_number text unique, sale_id uuid, customer_name text, product_name text,
+        quantity integer, unit_price numeric, total_amount numeric, payment_method text,
+        payment_status text, delivery_charge numeric, additional_charges numeric,
+        check (customer_name <> 'Reject invoice')
       );
       insert into products values ('00000000-0000-0000-0000-000000000001', 'Test block', 10);
       insert into finished_goods_inventory values ('Test block', 100, 4, 100, 400, now());
@@ -34,8 +41,12 @@ test('sales RPC rejects missing/null/unauthorized roles before changing stock', 
     // Install the already-deployed function, then apply the follow-up migration.
     await db.exec(original.slice(original.indexOf('CREATE OR REPLACE FUNCTION public.create_sale_with_current_price')));
     await db.exec(readFileSync(join(__dirname, '../supabase/migrations/20261105025627_deny_sales_without_staff_role.sql'), 'utf8'));
+    await db.exec(readFileSync(join(__dirname, '../supabase/migrations/20261123044436_auto_create_pos_invoice.sql'), 'utf8'));
     const userId = '00000000-0000-0000-0000-000000000002';
-    const sale = () => db.query(`select * from create_sale_with_current_price('Test customer', '00000000-0000-0000-0000-000000000001', 2, 'Credit')`);
+    const sale = (method = 'Credit', customer = 'Test customer') => db.query(
+      'select * from create_sale_with_current_price($1, $2, 2, $3)',
+      [customer, '00000000-0000-0000-0000-000000000001', method]
+    );
     await assert.rejects(sale(), /Not authenticated/);
     await db.query(`select set_config('test.user_id', $1, false)`, [userId]);
     await assert.rejects(sale(), /permission to create sales/); // no profile
@@ -52,8 +63,18 @@ test('sales RPC rejects missing/null/unauthorized roles before changing stock', 
       const result = await sale();
       assert.equal(Number(result.rows[0].total_amount), 20);
       assert.equal(Number(result.rows[0].balance_due), 20);
+      const invoice = await db.query('select total_amount, payment_status from invoices where sale_id = $1', [result.rows[0].id]);
+      assert.deepEqual(invoice.rows, [{ total_amount: '20', payment_status: 'Unpaid' }]);
     }
     assert.equal((await db.query('select quantity from finished_goods_inventory')).rows[0].quantity, 94);
+    for (const method of ['Cash', 'Mobile Money']) {
+      const result = await sale(method);
+      const invoice = await db.query('select payment_method, payment_status from invoices where sale_id = $1', [result.rows[0].id]);
+      assert.deepEqual(invoice.rows, [{ payment_method: method, payment_status: 'Paid' }]);
+    }
+    await assert.rejects(sale('Cash', 'Reject invoice'), /check constraint/);
+    assert.equal((await db.query('select quantity from finished_goods_inventory')).rows[0].quantity, 90);
+    assert.equal((await db.query('select count(*)::int as n from sales')).rows[0].n, 5);
     const privileges = await db.query(`select
       has_function_privilege('anon', 'create_sale_with_current_price(text,uuid,integer,text)', 'execute') as anon,
       has_function_privilege('authenticated', 'create_sale_with_current_price(text,uuid,integer,text)', 'execute') as staff`);
